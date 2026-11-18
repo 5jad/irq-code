@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/irq-ast",
+  "crates/irq-lexer",
+  "crates/irq-parser",
+  "crates/irq-diagnostics",
+  "crates/irq-check",
+  "crates/irq-codegen-rust",
+  "crates/irq-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]

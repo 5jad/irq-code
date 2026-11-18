@@ -1,0 +1,33 @@
+mod integer_boundaries
+
+fn min_i32() -> i32
+  reads: none
+  writes: none
+  requires: true
+  ensures: true
+  body:
+    return -2147483648
+
+fn min_i64() -> i64
+  reads: none
+  writes: none
+  requires: true
+  ensures: true
+  body:
+    return -9223372036854775808
+
+fn max_u32() -> u32
+  reads: none
+  writes: none
+  requires: true
+  ensures: true
+  body:
+    return 4294967295
+
+fn max_u64() -> u64
+  reads: none
+  writes: none
+  requires: true
+  ensures: true
+  body:
+    return 18446744073709551615

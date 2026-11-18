@@ -1,0 +1,17 @@
+mod strings_demo
+
+fn echo(value: str) -> str
+  reads: none
+  writes: none
+  requires: true
+  ensures: true
+  body:
+    return value
+
+fn greeting() -> str
+  reads: none
+  writes: none
+  requires: true
+  ensures: true
+  body:
+    return echo("مرحبا\nIRQ")

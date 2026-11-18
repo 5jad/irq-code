@@ -1,0 +1,9 @@
+mod hello
+
+pub fn main() -> i32
+  reads: none
+  writes: none
+  requires: true
+  ensures: result == 0
+  body:
+    return 0

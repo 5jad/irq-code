@@ -1,0 +1,14 @@
+mod flow_demo
+
+fn choose(x: i32) -> i32
+  reads: none
+  writes: none
+  requires: true
+  ensures: true
+  body:
+    let mut result: i32 = 0
+    if x > 0:
+      result = 1
+    else:
+      result = 2
+    return result

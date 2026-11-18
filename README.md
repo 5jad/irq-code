@@ -1,0 +1,65 @@
+# IRQ
+
+لغة برمجة موجّهة للكود الذي تولّده نماذج الذكاء الاصطناعي، مع فحص صريح للأنواع والأخطاء والآثار الجانبية.
+
+## القرار المعماري
+
+- تنفيذ المترجم والأدوات بلغة Rust.
+- تبقى دلالة IRQ مستقلة عن Rust؛ لا تعتبر IRQ مجرد صياغة بديلة له.
+- في المرحلة الأولى، يمكن توليد Rust كـ backend مؤقت للاستفادة من النظام البيئي والتحسينات.
+- تثبت واجهات AST وHIR وIR قبل إضافة backend أصلي مثل Cranelift أو LLVM.
+
+## مراحل المترجم
+
+`source -> lexer -> parser -> AST -> name/type/effect checks -> HIR -> Rust backend -> rustc`
+
+هذا هو المسار المستهدف؛ التنفيذ الحالي لا يملك HIR بعد، ويولّد `emit-rust` مباشرة من AST للـsubset فقط.
+
+العقود والتحقق الرمزي مرحلة لاحقة منفصلة. لا ندّعي إثباتها في MVP قبل تعريف المنطق المدعوم واختباره.
+
+## وثائق التصميم والبحث
+
+- [TODO وخارطة المراحل](TODO.md)
+- [مواصفة MVP المقترحة](docs/irq-mvp-spec.md)
+- [قواعد EBNF للـsubset المنفذ حالياً](docs/implemented-subset.ebnf)
+- [بحث أخطاء الكود المولد ومخاطره الأمنية](docs/ai-code-risk-research.md)
+- [عقد كتابة IRQ بواسطة نماذج AI](docs/ai-authoring-contract.md)
+
+## بناء المشروع
+
+```sh
+cargo build --workspace
+cargo test --workspace
+cargo run -p irq -- check examples/hello.irq
+cargo run -p irq -- check examples/if_mixed_return.irq
+cargo run -p irq -- check examples/integer_boundaries.irq
+cargo run -p irq -- check examples/strings.irq
+cargo run -p irq -- emit-rust examples/checked_arithmetic.irq > /tmp/checked_arithmetic.rs
+rustc --crate-type lib /tmp/checked_arithmetic.rs -o /tmp/libchecked_arithmetic.rlib
+cargo run -p irq -- emit-rust examples/strings.irq > /tmp/strings.rs
+rustc --crate-type lib /tmp/strings.rs -o /tmp/libstrings.rlib
+cargo run -p irq -- build examples/checked_arithmetic.irq /tmp/libchecked_arithmetic.rlib
+```
+
+## الحالة الحالية
+
+- يعمل lexer ويحوّل الرموز مع إزاحات byte-accurate لـUTF-8، وله اختبارات عربية للمواقع والأخطاء.
+- يعمل parser أولي يتحقق من اسم الوحدة ورأس الدالة والأقسام، ويبني AST لـ`let`, الإسناد و`return` مع subset من التعبيرات.
+- يدعم string literals UTF-8 من نوع `str` مع `\n`, `\t`, `\r`, `\"`, و`\\`.
+- يدعم parser استدعاءات الدوال المحلية البسيطة، ويفحص وجودها وأنواع/عدد معاملاتها.
+- يدعم `if/else` المتداخل بشرط `bool` وتصريحات/إسنادات محلية بنطاق مستقل. يمكن للفرعين الرجوع أو الاستمرار، كما يمكن لمسار واحد أن يرجع والآخر يكمل بشرط أن يصل الأخير لاحقاً إلى `return`؛ ما زالت قواعد تدفق القيم والتغطية الكاملة للحلقات/`match` غير مكتملة.
+- لا تزال `match` والحقول والمجموعات غير مدعومة في parser الحالي.
+- يوجد فاحص أنواع أولي للأنواع scalar والمتغيرات والإسناد وقيمة `return`؛ ليس نظام أنواع كاملاً.
+- يفحص المجال العددي للثوابت بحسب النوع المتوقع ويرفض القسمة على صفر الثابتة؛ Rust backend يستخدم checked arithmetic ويرجع `IrqRuntimeError` عند overflow أو القسمة الديناميكية على صفر.
+- `irq check` يشغّل parse وفاحص الأنواع scalar ويرجع JSON يذكر ما فُحص وما لم يُفحص.
+- `irq emit-rust` يرفض الملف إذا فشل parse/typecheck ثم يولّد Rust مستقلاً للـsubset.
+- `irq build <file.irq> <output.rlib>` يشغّل `rustc` تلقائياً ويخرج مكتبة Rust للـsubset؛ لا ينشئ executable ولا يشغّل البرنامج. يترجم إلى ملف مؤقت بجانب الهدف ثم يستبدل الناتج بعد نجاح الترجمة فقط.
+- **لا يثبت العقود ولا يفحص الآثار ولا يدعم كل IRQ أو يعزل البرنامج المولد.**
+
+مثال تشغيل:
+
+```sh
+cargo run -p irq -- check examples/hello.irq
+```
+
+# irq-code

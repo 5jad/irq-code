@@ -1,0 +1,16 @@
+[package]
+name = "irq"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "irq"
+path = "src/main.rs"
+
+[dependencies]
+irq-lexer = { path = "../irq-lexer" }
+irq-parser = { path = "../irq-parser" }
+irq-check = { path = "../irq-check" }
+irq-codegen-rust = { path = "../irq-codegen-rust" }
+irq-ast = { path = "../irq-ast" }

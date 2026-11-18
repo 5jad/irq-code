@@ -1,0 +1,11 @@
+[package]
+name = "irq-check"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+irq-ast = { path = "../irq-ast" }
+
+[dev-dependencies]
+irq-parser = { path = "../irq-parser" }

@@ -1,0 +1,17 @@
+mod checked_arithmetic
+
+fn add(a: i32, b: i32) -> i32
+  reads: none
+  writes: none
+  requires: true
+  ensures: true
+  body:
+    return a + b
+
+fn divide(a: i32, b: i32) -> i32
+  reads: none
+  writes: none
+  requires: true
+  ensures: true
+  body:
+    return a / b
