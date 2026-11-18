@@ -358,6 +358,20 @@ fn parse_block(
                 then_body,
                 else_body,
             });
+        } else if let Some(condition) = trimmed
+            .strip_prefix("while ")
+            .and_then(|s| s.strip_suffix(':'))
+        {
+            let condition = parse_expression(condition.trim()).map_err(|mut e| {
+                e.line = line;
+                e
+            })?;
+            *cursor += 1;
+            let body = parse_block(rows, cursor, expected_indent + 2)?;
+            if body.is_empty() {
+                return Err(error(line, "while body must not be empty"));
+            }
+            statements.push(Statement::While { condition, body });
         } else {
             statements.push(parse_statement(trimmed, line)?);
             *cursor += 1;
@@ -519,5 +533,27 @@ mod tests {
             module.functions[0].body.as_slice(),
             [Statement::If { .. }]
         ));
+    }
+
+    #[test]
+    fn parses_while_with_nested_body() {
+        let source = "mod demo\nfn count() -> i32\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n    let mut n: i32 = 0\n    while n < 3:\n      n = n + 1\n    return n\n";
+        let module = parse(source).unwrap();
+        assert!(matches!(
+            module.functions[0].body.as_slice(),
+            [Statement::Let { .. }, Statement::While { body, .. }, Statement::Return(_)]
+                if matches!(body.as_slice(), [Statement::Assign { .. }])
+        ));
+    }
+
+    #[test]
+    fn rejects_empty_while_body() {
+        let source = "mod demo\nfn count() -> i32\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n    while true:\n    return 0\n";
+        assert!(
+            parse(source)
+                .unwrap_err()
+                .message
+                .contains("while body must not be empty")
+        );
     }
 }

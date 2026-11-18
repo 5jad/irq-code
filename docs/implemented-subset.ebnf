@@ -16,12 +16,13 @@ parameters   = parameter, { ",", parameter } ;
 parameter    = identifier, ":", type ;
 type         = nonempty_text ;
 block(n)     = indent(n), statement(n), { newline, indent(n), statement(n) } ;
-statement(n) = let_stmt | assignment | return_stmt | if_stmt(n) ;
+statement(n) = let_stmt | assignment | return_stmt | if_stmt(n) | while_stmt(n) ;
 let_stmt     = "let", [ "mut" ], identifier, ":", type, "=", expression ;
 assignment   = identifier, "=", expression ;
 return_stmt  = "return", expression ;
 if_stmt(n)   = "if", expression, ":", newline, block(n + 2),
                newline, indent(n), "else:", newline, block(n + 2) ;
+while_stmt(n) = "while", expression, ":", newline, block(n + 2) ;
 expression   = logical_or ;
 logical_or   = logical_and, { "or", logical_and } ;
 logical_and  = comparison, { "and", comparison } ;
@@ -41,12 +42,12 @@ escape       = "\\n" | "\\t" | "\\r" | "\\\"" | "\\\\" ;
 ## القيود الحالية
 
 - الملف يحتوي وحدة واحدة ودالة واحدة أو أكثر. كل دالة يجب أن تحتوي أقسام التوقيع بالترتيب المبين، مرة واحدة لكل قسم. النص داخل أقسام العقود والآثار لا يُفسر دلالياً حالياً.
-- `if` يتطلب `else`، وكل كتلة غير فارغة. المستوى الأعلى داخل جسم الدالة يبدأ بأربع مسافات، ويزيد التداخل بمسافتين لكل مستوى؛ أي indentation آخر مرفوض حالياً.
+- `if` يتطلب `else`، وكل كتلة `if` و`while` غير فارغة. المستوى الأعلى داخل جسم الدالة يبدأ بأربع مسافات، ويزيد التداخل بمسافتين لكل مستوى؛ أي indentation آخر مرفوض حالياً.
 - فاحص الأنواع يدعم `i32`, `i64`, `u32`, `u64`, `bool`, و`str` كأسماء أنواع. string literals تدعم UTF-8 escapes المحددة أعلاه؛ نوع القيمة المعادة `()` غير مدعوم بعد.
 - الأعداد الصحيحة literals غير المسندة إلى سياق نوعي يكون نوعها الافتراضي `i32`؛ في سياق عددي متوقع تُفحص الثوابت ضمن `i32`/`i64`/`u32`/`u64`. يخزن AST القيمة مؤقتاً كـ`i128` كي يمثّل حدود الأنواع المستهدفة قبل فحصها.
 - أسماء الدوال تستدعى محلياً داخل الوحدة فقط؛ لا يوجد `use` أو modules متعددة الملفات. استدعاء التعبير يسمح باسم دالة فقط.
-- `if/else` يمكن أن يرجع من الفرعين، أو يستمر من كليهما، أو يرجع من فرع ويستمر من الآخر إذا وجد `return` لاحق. المترجم يرفض function لا يثبت لها return نهائي.
-- هذا subset لا يضم loop، `match`, field access، generics، structs/enums، error propagation، أو contract expressions.
+- `if/else` يمكن أن يرجع من الفرعين، أو يستمر من كليهما، أو يرجع من فرع ويستمر من الآخر إذا وجد `return` لاحق. `while` قد تنفذ صفراً أو أكثر من المرات ولا تثبت وحدها رجوع الدالة؛ لذلك يلزم return قابل للوصول بعد الحلقة. لا يوجد `break` حالياً.
+- هذا subset لا يضم `for`, `match`, field access، generics، structs/enums، error propagation، أو contract expressions.
 - `a / b` مع مقام ثابت محسوب إلى صفر يُرفض ساكناً. Rust emitter للـsubset يحول العمليات العددية المدعومة إلى `checked_*` ويرجع `IrqRuntimeError` للـoverflow والمقام الديناميكي الصفري؛ `irq check` وحده لا يشغل هذه الفحوص.
 
 ## أسبقية العمليات

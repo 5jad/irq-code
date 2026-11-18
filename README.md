@@ -34,6 +34,7 @@ cargo run -p irq -- check examples/hello.irq
 cargo run -p irq -- check examples/if_mixed_return.irq
 cargo run -p irq -- check examples/integer_boundaries.irq
 cargo run -p irq -- check examples/strings.irq
+cargo run -p irq -- check examples/while_count.irq
 cargo run -p irq -- emit-rust examples/checked_arithmetic.irq > /tmp/checked_arithmetic.rs
 rustc --crate-type lib /tmp/checked_arithmetic.rs -o /tmp/libchecked_arithmetic.rlib
 cargo run -p irq -- emit-rust examples/strings.irq > /tmp/strings.rs
@@ -47,11 +48,12 @@ cargo run -p irq -- build examples/checked_arithmetic.irq /tmp/libchecked_arithm
 - يعمل parser أولي يتحقق من اسم الوحدة ورأس الدالة والأقسام، ويبني AST لـ`let`, الإسناد و`return` مع subset من التعبيرات.
 - يدعم string literals UTF-8 من نوع `str` مع `\n`, `\t`, `\r`, `\"`, و`\\`.
 - يدعم parser استدعاءات الدوال المحلية البسيطة، ويفحص وجودها وأنواع/عدد معاملاتها.
-- يدعم `if/else` المتداخل بشرط `bool` وتصريحات/إسنادات محلية بنطاق مستقل. يمكن للفرعين الرجوع أو الاستمرار، كما يمكن لمسار واحد أن يرجع والآخر يكمل بشرط أن يصل الأخير لاحقاً إلى `return`؛ ما زالت قواعد تدفق القيم والتغطية الكاملة للحلقات/`match` غير مكتملة.
+- يدعم `if/else` المتداخل بشرط `bool` وتصريحات/إسنادات محلية بنطاق مستقل. يمكن للفرعين الرجوع أو الاستمرار، كما يمكن لمسار واحد أن يرجع والآخر يكمل بشرط أن يصل الأخير لاحقاً إلى `return`.
+- يدعم `while` بشرط `bool` وكتلة متداخلة، ويعيد backend تقييم الشرط في كل دورة. الحلقة قد لا تعمل مطلقاً، فلا تُعدّ دليلاً على رجوع الدالة؛ `break` و`for` وتحليل invariants/control-flow الكامل غير متاحة.
 - لا تزال `match` والحقول والمجموعات غير مدعومة في parser الحالي.
 - يوجد فاحص أنواع أولي للأنواع scalar والمتغيرات والإسناد وقيمة `return`؛ ليس نظام أنواع كاملاً.
 - يفحص المجال العددي للثوابت بحسب النوع المتوقع ويرفض القسمة على صفر الثابتة؛ Rust backend يستخدم checked arithmetic ويرجع `IrqRuntimeError` عند overflow أو القسمة الديناميكية على صفر.
-- `irq check` يشغّل parse وفاحص الأنواع scalar ويرجع JSON يذكر ما فُحص وما لم يُفحص.
+- `irq check` يشغّل parse وفاحص الأنواع scalar وشرط/جسم `while` للـsubset ويرجع JSON يذكر ما فُحص وما لم يُفحص.
 - `irq emit-rust` يرفض الملف إذا فشل parse/typecheck ثم يولّد Rust مستقلاً للـsubset.
 - `irq build <file.irq> <output.rlib>` يشغّل `rustc` تلقائياً ويخرج مكتبة Rust للـsubset؛ لا ينشئ executable ولا يشغّل البرنامج. يترجم إلى ملف مؤقت بجانب الهدف ثم يستبدل الناتج بعد نجاح الترجمة فقط.
 - **لا يثبت العقود ولا يفحص الآثار ولا يدعم كل IRQ أو يعزل البرنامج المولد.**

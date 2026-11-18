@@ -40,6 +40,10 @@ pub enum Statement {
         then_body: Vec<Statement>,
         else_body: Vec<Statement>,
     },
+    While {
+        condition: Expression,
+        body: Vec<Statement>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

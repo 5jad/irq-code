@@ -136,6 +136,20 @@ pub fn check(module: &Module) -> Result<(), Vec<CheckError>> {
                         break;
                     }
                 }
+                Statement::While { condition, body } => {
+                    match infer(condition, &env, &signatures) {
+                        Ok(t) if t == "bool" => {}
+                        Ok(t) => errors.push(err(
+                            "E0209",
+                            f,
+                            format!("while condition must be bool, found `{t}`"),
+                        )),
+                        Err(e) => errors.push(err("E0204", f, e)),
+                    }
+                    // A while-loop may execute zero times, so it never proves that
+                    // the enclosing function returns. Its body is still type-checked.
+                    check_return_branch(body, f, &env, &signatures, &mut errors);
+                }
                 Statement::Return(value) => {
                     match infer_expected(value, &f.return_type, &env, &signatures) {
                         Ok(actual) if actual == f.return_type => {}
@@ -277,6 +291,19 @@ fn check_return_branch(
                 if then_returns && else_returns {
                     return true;
                 }
+            }
+            Statement::While { condition, body } => {
+                match infer(condition, &branch_env, signatures) {
+                    Ok(t) if t == "bool" => {}
+                    Ok(t) => errors.push(err(
+                        "E0209",
+                        function,
+                        format!("nested while condition must be bool, found `{t}`"),
+                    )),
+                    Err(e) => errors.push(err("E0204", function, e)),
+                }
+                // A loop's body may run zero times; do not propagate its return state.
+                check_return_branch(body, function, &branch_env, signatures, errors);
             }
             Statement::Return(value) => {
                 if !is_last {
@@ -704,6 +731,29 @@ mod tests {
     fn checks_nested_if_else_paths() {
         let source = "mod demo\nfn classify(x: i32) -> i32\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n    if x > 0:\n      if x > 10:\n        return 10\n      else:\n        return 1\n    else:\n      return 0\n";
         assert!(check(&parse(source).unwrap()).is_ok());
+    }
+
+    #[test]
+    fn checks_while_condition_and_keeps_outer_return_requirement() {
+        let valid =
+            program("    let mut n: i32 = 0\n    while n < 3:\n      n = n + 1\n    return n");
+        assert!(check(&valid).is_ok());
+
+        let non_bool = program("    while a:\n      return 1\n    return 0");
+        assert!(
+            check(&non_bool)
+                .unwrap_err()
+                .iter()
+                .any(|e| e.code == "E0209")
+        );
+
+        let missing_return = program("    let mut n: i32 = 0\n    while n < 3:\n      n = n + 1");
+        assert!(
+            check(&missing_return)
+                .unwrap_err()
+                .iter()
+                .any(|e| e.code == "E0207")
+        );
     }
 
     #[test]

@@ -1,0 +1,12 @@
+mod loops
+
+pub fn count_to_three() -> i32
+  reads: none
+  writes: none
+  requires: true
+  ensures: result == 3
+  body:
+    let mut count: i32 = 0
+    while count < 3:
+      count = count + 1
+    return count

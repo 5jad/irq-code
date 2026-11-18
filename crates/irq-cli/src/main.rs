@@ -69,7 +69,7 @@ fn main() -> ExitCode {
         "build" => build_rust(&module, &args[3]),
         _ => {
             println!(
-                "{{\"status\":\"ok\",\"phase\":\"mvp_subset\",\"checks\":[\"syntax_subset\",\"scalar_types\",\"immutability\",\"return_types\",\"if_else_flow\",\"constant_zero_division\",\"constant_integer_range\"],\"not_checked\":[\"contracts\",\"effects\",\"loops\",\"general_dataflow\"],\"backend\":\"rust_subset_available_via_emit-rust_and_build\",\"generated_runtime_guards\":[\"integer_overflow\",\"division_by_zero\"],\"module\":{:?},\"functions\":{}}}",
+                "{{\"status\":\"ok\",\"phase\":\"mvp_subset\",\"checks\":[\"syntax_subset\",\"scalar_types\",\"immutability\",\"return_types\",\"if_else_flow\",\"while_subset\",\"constant_zero_division\",\"constant_integer_range\"],\"not_checked\":[\"contracts\",\"effects\",\"for_loops\",\"break\",\"loop_invariants\",\"general_dataflow\"],\"backend\":\"rust_subset_available_via_emit-rust_and_build\",\"generated_runtime_guards\":[\"integer_overflow\",\"division_by_zero\"],\"module\":{:?},\"functions\":{}}}",
                 module.name,
                 module.functions.len()
             );

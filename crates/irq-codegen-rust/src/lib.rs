@@ -139,6 +139,13 @@ fn emit_block(
                 )?;
                 writeln!(out, "{pad}}}").unwrap();
             }
+            Statement::While { condition, body } => {
+                let condition = emit_expr(condition, Some("bool"), env, signatures)?;
+                writeln!(out, "{pad}while {condition} {{").unwrap();
+                let mut loop_env = env.clone();
+                emit_block(body, depth + 1, &mut loop_env, return_type, signatures, out)?;
+                writeln!(out, "{pad}}}").unwrap();
+            }
         }
     }
     Ok(())
@@ -363,6 +370,9 @@ mod tests {
         let irq = format!(
             "{irq}fn bool_expr(a: bool, b: bool, c: bool) -> bool\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n    return (a or b) and c\n"
         );
+        let irq = format!(
+            "{irq}fn count_to_three() -> i32\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n    let mut n: i32 = 0\n    while n < 3:\n      n = n + 1\n    return n\n"
+        );
         let module = irq_parser::parse(&irq).unwrap();
         irq_check::check(&module).unwrap();
         let generated = emit(&module).unwrap();
@@ -382,6 +392,7 @@ mod generated_tests {
     #[test] fn unicode_string_round_trips() { assert_eq!(__irq_greeting(), Ok(String::from("مرحبا"))); }
     #[test] fn string_comparison_does_not_consume_value() { assert_eq!(__irq_compare_return(String::from("مرحبا")), Ok(String::from("مرحبا"))); }
     #[test] fn boolean_precedence_matches_irq_ast() { assert_eq!(__irq_bool_expr(true, false, false), Ok(false)); }
+    #[test] fn while_rechecks_condition_and_mutates_outer_local() { assert_eq!(__irq_count_to_three(), Ok(3)); }
 }
 "#;
         let id = std::process::id();
