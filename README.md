@@ -19,8 +19,9 @@
 
 ## وثائق التصميم والبحث
 
+- [المواصفة المعيارية لـIRQ 0.1](docs/irq-0.1-language-spec.md)
 - [TODO وخارطة المراحل](TODO.md)
-- [مواصفة MVP المقترحة](docs/irq-mvp-spec.md)
+- [ملخص نطاق التنفيذ الحالي](docs/irq-mvp-spec.md)
 - [قواعد EBNF للـsubset المنفذ حالياً](docs/implemented-subset.ebnf)
 - [بحث أخطاء الكود المولد ومخاطره الأمنية](docs/ai-code-risk-research.md)
 - [عقد كتابة IRQ بواسطة نماذج AI](docs/ai-authoring-contract.md)
@@ -57,6 +58,7 @@ cargo run -p irq -- build examples/checked_arithmetic.irq /tmp/libchecked_arithm
 - `irq emit-rust` يرفض الملف إذا فشل parse/typecheck ثم يولّد Rust مستقلاً للـsubset.
 - `irq build <file.irq> <output.rlib>` يشغّل `rustc` تلقائياً ويخرج مكتبة Rust للـsubset؛ لا ينشئ executable ولا يشغّل البرنامج. يترجم إلى ملف مؤقت بجانب الهدف ثم يستبدل الناتج بعد نجاح الترجمة فقط.
 - **لا يثبت العقود ولا يفحص الآثار ولا يدعم كل IRQ أو يعزل البرنامج المولد.**
+- المواصفة المعيارية لـIRQ 0.1 تفصل بوضوح القرارات المحسومة عن الميزات التي لم ينفذها compiler بعد.
 
 مثال تشغيل:
 
