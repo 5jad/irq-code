@@ -26,7 +26,7 @@ while_stmt(n) = "while", expression, ":", newline, block(n + 2) ;
 expression   = logical_or ;
 logical_or   = logical_and, { "or", logical_and } ;
 logical_and  = comparison, { "and", comparison } ;
-comparison   = sum, { ( "==" | "!=" | "<" | "<=" | ">" | ">=" ), sum } ;
+comparison   = sum, [ ( "==" | "!=" | "<" | "<=" | ">" | ">=" ), sum ] ;
 sum          = product, { ( "+" | "-" ), product } ;
 product      = unary, { ( "*" | "/" | "%" ), unary } ;
 unary        = ( "not" | "-" ), unary | call | primary ;
@@ -38,7 +38,7 @@ escape       = "\\n" | "\\t" | "\\r" | "\\\"" | "\\\\" ;
 identifier   = ASCII letter or "_", { ASCII letter | digit | "_" }, excluding reserved words ;
 ```
 
-`indent(n)` تعني بالضبط `n` مسافة في جسم الدالة؛ هذه grammar بصيغة EBNF موسعة لأنها تستخدم وسيط العمق `n` لتعريف الكتل المتداخلة. التنفيذ الحالي يحمي `#` داخل السلاسل، يقبل تعليقات الأسطر المستقلة فقط، ويرفض الكلمات المحجوزة كأسماء ويراجع indentation لرأس الوحدة/الدوال وأقسام التوقيع. لا تزال القواعد تُنفذ عبر parser سطري لا عبر token grammar كاملة؛ قد تبقى فجوات في whitespace والسياقات النحوية وتُتابع في المرحلة 2.
+`indent(n)` تعني بالضبط `n` مسافة في جسم الدالة؛ هذه grammar بصيغة EBNF موسعة لأنها تستخدم وسيط العمق `n` لتعريف الكتل المتداخلة. التنفيذ الحالي يحمي `#` داخل السلاسل، يقبل تعليقات الأسطر المستقلة فقط، ويرفض الكلمات المحجوزة كأسماء ويراجع indentation لرأس الوحدة/الدوال وأقسام التوقيع. يتحقق من `reads/writes: none` ومن نحو تعبيرات العقود، ويفرض `SP` حول `and`/`or` وبعد commas وفي توقيعات الدوال؛ وتُرفض سلاسل المقارنة المتتابعة إلا مع أقواس صريحة. أخطاء التعابير داخل أسطر الجسم تحمل absolute UTF-8 spans؛ أما AST nodes وكل structural errors فلم تحصل بعد على spans عقدية كاملة. لا تزال القواعد تُنفذ عبر parser سطري لا عبر token grammar كاملة، لذا تبقى فجوات سياقية ونحوية.
 
 الكلمات المحجوزة المعروفة للـprofile الحالي والمخطط هي `mod`, `pub`, `fn`, `reads`, `writes`, `requires`, `ensures`, `body`, `none`, `let`, `mut`, `if`, `else`, `while`, `return`, `or`, `and`, `not`, `true`, `false`, `i32`, `u32`, `i64`, `u64`, `bool`, `str`, `Result`, `use`, `const`, `struct`, `enum`, `errdef`, `test`, `for`, `break`, `old`, `null`, `opt`, `match`, `try`, `ok`, و`err`.
 

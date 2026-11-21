@@ -40,6 +40,7 @@ cargo run -p irq -- check examples/if_mixed_return.irq
 cargo run -p irq -- check examples/integer_boundaries.irq
 cargo run -p irq -- check examples/strings.irq
 cargo run -p irq -- check examples/while_count.irq
+cargo run -p irq -- fmt examples/hello.irq > /tmp/hello.formatted.irq
 cargo run -p irq -- emit-rust examples/checked_arithmetic.irq > /tmp/checked_arithmetic.rs
 rustc --crate-type lib /tmp/checked_arithmetic.rs -o /tmp/libchecked_arithmetic.rlib
 cargo run -p irq -- emit-rust examples/strings.irq > /tmp/strings.rs
@@ -57,6 +58,8 @@ cargo run -p irq -- build examples/checked_arithmetic.irq /tmp/libchecked_arithm
 - يعمل parser أولي يتحقق من اسم الوحدة ورأس الدالة والأقسام، ويبني AST لـ`let`, الإسناد و`return` مع subset من التعبيرات.
 - يدعم string literals UTF-8 من نوع `str` مع `\n`, `\t`, `\r`, `\"`, و`\\`.
 - يدعم parser استدعاءات الدوال المحلية البسيطة، ويفحص وجودها وأنواع/عدد معاملاتها.
+- يرفض سلاسل المقارنة المتتابعة وفق EBNF، ويدعم `irq fmt` كتطبيع محافظ للنهايات والمسافات الخارجية؛ لا يعيد formatter صياغة expressions.
+- أخطاء parsing داخل تعبيرات الأسطر تعرض absolute UTF-8 byte spans؛ spans لكل AST node وأخطاء structural ذات token ranges ما زالت غير مكتملة.
 - يدعم `if/else` المتداخل بشرط `bool` وتصريحات/إسنادات محلية بنطاق مستقل. يمكن للفرعين الرجوع أو الاستمرار، كما يمكن لمسار واحد أن يرجع والآخر يكمل بشرط أن يصل الأخير لاحقاً إلى `return`.
 - يدعم `while` بشرط `bool` وكتلة متداخلة، ويعيد backend تقييم الشرط في كل دورة. الحلقة قد لا تعمل مطلقاً، فلا تُعدّ دليلاً على رجوع الدالة؛ `break` و`for` وتحليل invariants/control-flow الكامل غير متاحة.
 - لا تزال `match` والحقول والمجموعات غير مدعومة في parser الحالي.

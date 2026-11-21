@@ -112,7 +112,12 @@ pub fn lex(source: &str) -> Result<Vec<Token>, LexError> {
         }
         if c == '\n' {
             if out.len() >= MAX_TOKENS {
-                return Err(token_limit_error(line, col));
+                return Err(token_limit_error(
+                    byte_offsets[start],
+                    byte_offsets[start + 1],
+                    line,
+                    col,
+                ));
             }
             i += 1;
             line += 1;
@@ -250,7 +255,12 @@ pub fn lex(source: &str) -> Result<Vec<Token>, LexError> {
             }
         };
         if out.len() >= MAX_TOKENS {
-            return Err(token_limit_error(start_line, start_col));
+            return Err(token_limit_error(
+                byte_offsets[start],
+                byte_offsets[i],
+                start_line,
+                start_col,
+            ));
         }
         out.push(Token {
             kind,
@@ -262,6 +272,9 @@ pub fn lex(source: &str) -> Result<Vec<Token>, LexError> {
             },
         });
         line_has_code = true;
+    }
+    if out.len() >= MAX_TOKENS {
+        return Err(token_limit_error(source.len(), source.len(), line, col));
     }
     out.push(Token {
         kind: TokenKind::Eof,
@@ -275,13 +288,13 @@ pub fn lex(source: &str) -> Result<Vec<Token>, LexError> {
     Ok(out)
 }
 
-fn token_limit_error(line: usize, column: usize) -> LexError {
+fn token_limit_error(start: usize, end: usize, line: usize, column: usize) -> LexError {
     LexError {
         code: codes::TOKEN_LIMIT,
         message: format!("token count exceeds the {MAX_TOKENS} token limit"),
         span: Span {
-            start: 0,
-            end: 0,
+            start,
+            end,
             line,
             column,
         },
@@ -386,6 +399,20 @@ mod tests {
         let source = "a ".repeat(MAX_TOKENS + 1);
         let error = lex(&source).unwrap_err();
         assert_eq!(error.code, codes::TOKEN_LIMIT);
+        assert_eq!(error.span.start, "a ".repeat(MAX_TOKENS).len());
+        assert_eq!(error.span.end, error.span.start + 1);
+    }
+
+    #[test]
+    fn token_limit_includes_eof_token() {
+        let exactly_at_limit = "a ".repeat(MAX_TOKENS - 1);
+        assert_eq!(lex(&exactly_at_limit).unwrap().len(), MAX_TOKENS);
+
+        let over_limit = "a ".repeat(MAX_TOKENS);
+        let error = lex(&over_limit).unwrap_err();
+        assert_eq!(error.code, codes::TOKEN_LIMIT);
+        assert_eq!(error.span.start, over_limit.len());
+        assert_eq!(error.span.end, over_limit.len());
     }
 
     #[test]

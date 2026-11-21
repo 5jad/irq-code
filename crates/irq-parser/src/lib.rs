@@ -25,6 +25,7 @@ pub fn parse_expression(source: &str) -> Result<Expression, ParseError> {
         span: Some(e.span),
     })?;
     let mut p = ExprParser {
+        source: source.to_owned(),
         tokens,
         pos: 0,
         depth: 0,
@@ -37,6 +38,7 @@ pub fn parse_expression(source: &str) -> Result<Expression, ParseError> {
 }
 
 struct ExprParser {
+    source: String,
     tokens: Vec<Token>,
     pos: usize,
     depth: usize,
@@ -107,6 +109,7 @@ impl ExprParser {
             }
             _ => return Err(self.err("expected expression")),
         };
+        let mut comparison_seen = false;
         loop {
             if matches!(self.peek(), TokenKind::LParen) {
                 let Expression::Name(callee) = lhs else {
@@ -118,7 +121,14 @@ impl ExprParser {
                     loop {
                         arguments.push(self.expression(0)?);
                         if matches!(self.peek(), TokenKind::Comma) {
+                            let comma = self.tokens[self.pos].span;
                             self.take();
+                            let next = self.tokens[self.pos].span;
+                            self.require_spaces(
+                                comma.end,
+                                next.start,
+                                "expected a space after `,`",
+                            )?;
                             continue;
                         }
                         break;
@@ -146,6 +156,35 @@ impl ExprParser {
                 TokenKind::Percent => (BinaryOp::Remainder, 9, 10),
                 _ => break,
             };
+            if matches!(op, BinaryOp::And | BinaryOp::Or) {
+                let current = self.tokens[self.pos].span;
+                let previous = self.tokens[self.pos - 1].span;
+                let next = self.tokens[self.pos + 1].span;
+                self.require_spaces(
+                    previous.end,
+                    current.start,
+                    "expected a space before logical operator",
+                )?;
+                self.require_spaces(
+                    current.end,
+                    next.start,
+                    "expected a space after logical operator",
+                )?;
+            }
+            if matches!(
+                op,
+                BinaryOp::Equal
+                    | BinaryOp::NotEqual
+                    | BinaryOp::Less
+                    | BinaryOp::LessEqual
+                    | BinaryOp::Greater
+                    | BinaryOp::GreaterEqual
+            ) {
+                if comparison_seen {
+                    return Err(self.err("chained comparisons are not allowed; add parentheses"));
+                }
+                comparison_seen = true;
+            }
             if l < min_bp {
                 break;
             }
@@ -158,6 +197,19 @@ impl ExprParser {
             };
         }
         Ok(lhs)
+    }
+
+    fn require_spaces(&self, start: usize, end: usize, message: &str) -> Result<(), ParseError> {
+        if start < end
+            && self
+                .source
+                .get(start..end)
+                .is_some_and(|gap| gap.chars().all(|ch| ch == ' '))
+        {
+            Ok(())
+        } else {
+            Err(self.err(message))
+        }
     }
 }
 
@@ -226,19 +278,43 @@ pub fn parse(source: &str) -> Result<Module, ParseError> {
             .find(')')
             .map(|n| n + open)
             .ok_or_else(|| error(line, "expected `)` in function signature"))?;
-        if !signature[close..].contains("->") {
-            return Err(error(
-                line,
-                "function signature must declare `-> ReturnType`",
-            ));
+        let return_tail = signature[close + 1..].trim_start_matches(' ');
+        if return_tail == &signature[close + 1..]
+            || !return_tail.starts_with("->")
+            || !return_tail[2..].starts_with(' ')
+        {
+            return Err(error(line, "function signature must use `) -> ReturnType`"));
         }
         let params_text = &signature[open + 1..close];
         let mut parameters = Vec::new();
         if !params_text.trim().is_empty() {
-            for param in params_text.split(',') {
+            for (parameter_index, raw_param) in params_text.split(',').enumerate() {
+                let param = if parameter_index == 0 {
+                    raw_param
+                } else {
+                    raw_param.trim_start_matches(' ')
+                };
+                if parameter_index > 0 && !raw_param.starts_with(' ') {
+                    return Err(error(line, "parameters after `,` require a space"));
+                }
+                if raw_param.contains('\t') {
+                    return Err(error(line, "tabs are not allowed in parameter separators"));
+                }
                 let (param_name, param_ty) = param
                     .split_once(':')
                     .ok_or_else(|| error(line, "each parameter requires `name: Type`"))?;
+                if param_name.trim() != param_name {
+                    return Err(error(
+                        line,
+                        "parameter name must not contain surrounding spaces",
+                    ));
+                }
+                if !param_ty.starts_with(' ') || param_ty.trim_end() != param_ty {
+                    return Err(error(
+                        line,
+                        "parameter type requires a space after `:` and none before `,`",
+                    ));
+                }
                 let param_name = param_name.trim();
                 let param_ty = param_ty.trim();
                 if !valid_ident(param_name) || param_ty.is_empty() {
@@ -256,11 +332,7 @@ pub fn parse(source: &str) -> Result<Module, ParseError> {
                 });
             }
         }
-        let return_tail = signature[close + 1..]
-            .trim()
-            .strip_prefix("->")
-            .ok_or_else(|| error(line, "expected `-> ReturnType`"))?
-            .trim();
+        let return_tail = return_tail[2..].trim();
         let return_type = return_tail
             .split("| err(")
             .next()
@@ -278,9 +350,9 @@ pub fn parse(source: &str) -> Result<Module, ParseError> {
             if section.starts_with("fn ") || section.starts_with("pub fn ") {
                 break;
             }
-            if let Some(key) = ["reads:", "writes:", "requires:", "ensures:", "body:"]
+            if ["reads:", "writes:", "requires:", "ensures:", "body:"]
                 .iter()
-                .find(|k| section.starts_with(**k))
+                .any(|key| section.starts_with(*key))
             {
                 let indent = rows[i].1.len() - rows[i].1.trim_start_matches(' ').len();
                 if indent != 2 {
@@ -289,10 +361,35 @@ pub fn parse(source: &str) -> Result<Module, ParseError> {
                         "function signature sections must use exactly two leading spaces",
                     ));
                 }
-                let key = key.trim_end_matches(':');
-                if sections.iter().any(|(existing, _)| *existing == key) {
-                    return Err(error(rows[i].0, &format!("duplicate `{key}:` section")));
+                let (section_name, section_value) = section.split_once(':').unwrap();
+                let section_value = section_value.trim();
+                if sections
+                    .iter()
+                    .any(|(existing, _)| *existing == section_name)
+                {
+                    return Err(error(
+                        rows[i].0,
+                        &format!("duplicate `{section_name}:` section"),
+                    ));
                 }
+                match section_name {
+                    "reads" | "writes" if section_value != "none" => {
+                        return Err(error(
+                            rows[i].0,
+                            "IRQ 0.1 permits only `none` in reads/writes sections",
+                        ));
+                    }
+                    "requires" | "ensures" => {
+                        let expression = section_value;
+                        parse_expression(expression)
+                            .map_err(|e| map_expression_error(e, expression, source, rows[i].0))?;
+                    }
+                    "body" if !section_value.is_empty() => {
+                        return Err(error(rows[i].0, "`body:` section header must be empty"));
+                    }
+                    _ => {}
+                }
+                let key = section_name;
                 sections.push((key, rows[i].0));
                 if key == "body" {
                     body_index = Some(i);
@@ -325,7 +422,7 @@ pub fn parse(source: &str) -> Result<Module, ParseError> {
         }
         let body_index = body_index.ok_or_else(|| error(line, "body section missing"))?;
         let mut body_cursor = body_index + 1;
-        let body = parse_block(&rows, &mut body_cursor, 4)?;
+        let body = parse_block(&rows, &mut body_cursor, 4, source)?;
         if body.is_empty() {
             return Err(error(
                 rows[body_index].0,
@@ -430,6 +527,7 @@ fn parse_block(
     rows: &[(usize, &str)],
     cursor: &mut usize,
     expected_indent: usize,
+    full_source: &str,
 ) -> Result<Vec<Statement>, ParseError> {
     if expected_indent > 4 + MAX_BLOCK_DEPTH * 2 {
         return Err(ParseError {
@@ -457,13 +555,11 @@ fn parse_block(
             .strip_prefix("if ")
             .and_then(|s| s.strip_suffix(':'))
         {
-            let condition = parse_expression(condition.trim()).map_err(|mut e| {
-                e.line = line;
-                e.span = None;
-                e
-            })?;
+            let condition = condition.trim();
+            let condition = parse_expression(condition)
+                .map_err(|e| map_expression_error(e, condition, full_source, line))?;
             *cursor += 1;
-            let then_body = parse_block(rows, cursor, expected_indent + 2)?;
+            let then_body = parse_block(rows, cursor, expected_indent + 2, full_source)?;
             if then_body.is_empty() {
                 return Err(error(line, "if branch must not be empty"));
             }
@@ -481,7 +577,7 @@ fn parse_block(
                 ));
             }
             *cursor += 1;
-            let else_body = parse_block(rows, cursor, expected_indent + 2)?;
+            let else_body = parse_block(rows, cursor, expected_indent + 2, full_source)?;
             if else_body.is_empty() {
                 return Err(error(else_line, "else branch must not be empty"));
             }
@@ -494,34 +590,28 @@ fn parse_block(
             .strip_prefix("while ")
             .and_then(|s| s.strip_suffix(':'))
         {
-            let condition = parse_expression(condition.trim()).map_err(|mut e| {
-                e.line = line;
-                e.span = None;
-                e
-            })?;
+            let condition = condition.trim();
+            let condition = parse_expression(condition)
+                .map_err(|e| map_expression_error(e, condition, full_source, line))?;
             *cursor += 1;
-            let body = parse_block(rows, cursor, expected_indent + 2)?;
+            let body = parse_block(rows, cursor, expected_indent + 2, full_source)?;
             if body.is_empty() {
                 return Err(error(line, "while body must not be empty"));
             }
             statements.push(Statement::While { condition, body });
         } else {
-            statements.push(parse_statement(trimmed, line)?);
+            statements.push(parse_statement(trimmed, line, full_source)?);
             *cursor += 1;
         }
     }
     Ok(statements)
 }
 
-fn parse_statement(source: &str, line: usize) -> Result<Statement, ParseError> {
+fn parse_statement(source: &str, line: usize, full_source: &str) -> Result<Statement, ParseError> {
     if let Some(expr) = source.strip_prefix("return ") {
-        return Ok(Statement::Return(parse_expression(expr).map_err(
-            |mut e| {
-                e.line = line;
-                e.span = None;
-                e
-            },
-        )?));
+        return Ok(Statement::Return(
+            parse_expression(expr).map_err(|e| map_expression_error(e, expr, full_source, line))?,
+        ));
     }
     if let Some(decl) = source.strip_prefix("let ") {
         let (lhs, rhs) = decl
@@ -541,11 +631,9 @@ fn parse_statement(source: &str, line: usize) -> Result<Statement, ParseError> {
         if !valid_ident(name) || ty.is_empty() {
             return Err(error(line, "invalid let name or missing type"));
         }
-        let value = parse_expression(rhs.trim()).map_err(|mut e| {
-            e.line = line;
-            e.span = None;
-            e
-        })?;
+        let rhs = rhs.trim();
+        let value =
+            parse_expression(rhs).map_err(|e| map_expression_error(e, rhs, full_source, line))?;
         return Ok(Statement::Let {
             name: name.to_owned(),
             mutable,
@@ -558,11 +646,9 @@ fn parse_statement(source: &str, line: usize) -> Result<Statement, ParseError> {
     {
         let name = lhs.trim();
         if valid_ident(name) {
-            let value = parse_expression(rhs.trim()).map_err(|mut e| {
-                e.line = line;
-                e.span = None;
-                e
-            })?;
+            let rhs = rhs.trim();
+            let value = parse_expression(rhs)
+                .map_err(|e| map_expression_error(e, rhs, full_source, line))?;
             return Ok(Statement::Assign {
                 name: name.to_owned(),
                 value,
@@ -573,6 +659,29 @@ fn parse_statement(source: &str, line: usize) -> Result<Statement, ParseError> {
         line,
         "unsupported statement in current parser subset",
     ))
+}
+
+fn map_expression_error(
+    mut error: ParseError,
+    expression: &str,
+    full_source: &str,
+    line: usize,
+) -> ParseError {
+    error.line = line;
+    if let Some(mut span) = error.span {
+        let base = (expression.as_ptr() as usize).saturating_sub(full_source.as_ptr() as usize);
+        let base = base.min(full_source.len());
+        let line_start = full_source[..base]
+            .rfind('\n')
+            .map_or(0, |offset| offset + 1);
+        let base_column = full_source[line_start..base].chars().count() + 1;
+        span.start += base;
+        span.end += base;
+        span.line = line;
+        span.column += base_column - 1;
+        error.span = Some(span);
+    }
+    error
 }
 
 fn error(line: usize, message: &str) -> ParseError {
@@ -616,12 +725,52 @@ mod tests {
     }
 
     #[test]
+    fn validates_effect_contract_and_body_section_grammar() {
+        for source in [
+            VALID.replace("reads: none", "reads: filesystem"),
+            VALID.replace("writes: none", "writes: network"),
+            VALID.replace("requires: true", "requires: true and"),
+            VALID.replace("  body:", "  body: unexpected"),
+        ] {
+            assert!(
+                parse(&source).is_err(),
+                "accepted invalid section:\n{source}"
+            );
+        }
+        assert!(parse(VALID).is_ok());
+    }
+
+    #[test]
     fn multiplication_binds_tighter_than_addition() {
         let parsed = parse_expression("1 + 2 * 3").unwrap();
         assert!(
             matches!(parsed, Expression::Binary { op: BinaryOp::Add, ref right, .. }
             if matches!(**right, Expression::Binary { op: BinaryOp::Multiply, .. }))
         );
+    }
+
+    #[test]
+    fn rejects_chained_comparisons_but_accepts_explicit_parenthesization() {
+        for expression in ["a < b < c", "a == b != c", "a <= b > c"] {
+            let error = parse_expression(expression).unwrap_err();
+            assert!(
+                error.message.contains("chained comparisons"),
+                "{expression}"
+            );
+            assert!(error.span.is_some());
+        }
+        assert!(parse_expression("(a < b) == true").is_ok());
+    }
+
+    #[test]
+    fn enforces_required_spaces_around_logical_operators_and_after_commas() {
+        assert!(parse_expression("left or right").is_ok());
+        assert!(parse_expression("left  and   right").is_ok());
+        for expression in ["left or(right)", "left\tor\tright", "left andright"] {
+            assert!(parse_expression(expression).is_err(), "{expression}");
+        }
+        assert!(parse_expression("call(1, 2)").is_ok());
+        assert!(parse_expression("call(1,2)").is_err());
     }
 
     #[test]
@@ -645,11 +794,26 @@ mod tests {
     }
 
     #[test]
-    fn embedded_expression_errors_keep_correct_line_without_fake_file_offset() {
+    fn embedded_expression_errors_carry_absolute_file_spans() {
         let source = VALID.replace("return 0", "return 0 +");
         let error = parse(&source).unwrap_err();
         assert_eq!(error.line, 9);
-        assert_eq!(error.span, None);
+        let span = error.span.unwrap();
+        let expected = source.find("0 +").unwrap() + 3;
+        assert_eq!(span.start, expected);
+        assert_eq!(span.end, expected);
+        assert_eq!(span.line, 9);
+    }
+
+    #[test]
+    fn embedded_expression_error_after_unicode_uses_absolute_utf8_offset() {
+        let source = VALID.replace("return 0", "return \"مرحبا\" +");
+        let error = parse(&source).unwrap_err();
+        let span = error.span.unwrap();
+        let expected = source.find('+').unwrap() + 1;
+        assert_eq!(span.start, expected);
+        assert_eq!(span.end, expected);
+        assert_eq!(span.line, 9);
     }
 
     #[test]
@@ -762,6 +926,25 @@ mod tests {
                 .contains("tabs are not allowed")
         );
         assert!(parse(&VALID.replace("mod demo", "mod\tdemo")).is_err());
+    }
+
+    #[test]
+    fn enforces_signature_separator_spaces_from_the_ebnf() {
+        for signature in [
+            "fn calc(a:i32) -> i32",
+            "fn calc(a : i32) -> i32",
+            "fn calc(a: i32,b: i32) -> i32",
+            "fn calc() ->i32",
+            "fn calc()-> i32",
+        ] {
+            let source = VALID.replace("pub fn main() -> i32", signature);
+            assert!(parse(&source).is_err(), "accepted signature `{signature}`");
+        }
+        let accepted = VALID.replace(
+            "pub fn main() -> i32",
+            "pub fn calc(a:  i32,  b: i32)  ->  i32",
+        );
+        assert!(parse(&accepted).is_ok());
     }
 
     #[test]

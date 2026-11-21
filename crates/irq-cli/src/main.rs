@@ -11,7 +11,7 @@ fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
     let command = args.get(1).map(String::as_str).unwrap_or("");
     let valid_args = match command {
-        "check" | "emit-rust" => args.len() == 3,
+        "check" | "emit-rust" | "fmt" => args.len() == 3,
         "build" => args.len() == 4,
         _ => false,
     };
@@ -20,7 +20,7 @@ fn main() -> ExitCode {
             &[Diagnostic::error(
                 codes::INVALID_USAGE,
                 "usage_error",
-                "usage: irq <check|emit-rust> <file.irq> | irq build <file.irq> <output.rlib>",
+                "usage: irq <check|emit-rust|fmt> <file.irq> | irq build <file.irq> <output.rlib>",
             )],
             &SourceMap::default(),
         );
@@ -89,6 +89,10 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    if command == "fmt" {
+        print!("{}", format_source(&source));
+        return ExitCode::SUCCESS;
+    }
     if let Err(errors) = irq_check::check(&module) {
         let diagnostics: Vec<_> = errors
             .into_iter()
@@ -143,6 +147,69 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
     }
+}
+
+/// Applies a stable whitespace-only format after parsing has established syntax validity.
+fn format_source(source: &str) -> String {
+    let normalized = source.replace("\r\n", "\n");
+    let mut lines = Vec::new();
+    let mut previous_blank = true;
+    for raw in normalized.lines() {
+        let line = trim_trailing_space_outside_literals(raw);
+        let blank = line.trim().is_empty();
+        if blank {
+            if !previous_blank && !lines.is_empty() {
+                lines.push(String::new());
+            }
+            previous_blank = true;
+            continue;
+        }
+        let trimmed = line.trim_start();
+        let top_level_function =
+            line == trimmed && (trimmed.starts_with("fn ") || trimmed.starts_with("pub fn "));
+        if top_level_function && !lines.is_empty() && !previous_blank {
+            lines.push(String::new());
+        }
+        lines.push(line);
+        previous_blank = false;
+    }
+    while lines.last().is_some_and(String::is_empty) {
+        lines.pop();
+    }
+    if lines.is_empty() {
+        String::new()
+    } else {
+        format!("{}\n", lines.join("\n"))
+    }
+}
+
+fn trim_trailing_space_outside_literals(line: &str) -> String {
+    let mut quoted = false;
+    let mut escaped = false;
+    let mut last_significant_end = 0;
+    for (offset, ch) in line.char_indices() {
+        if quoted {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                quoted = false;
+                last_significant_end = offset + ch.len_utf8();
+            } else {
+                last_significant_end = offset + ch.len_utf8();
+            }
+        } else if ch == '"' {
+            quoted = true;
+            last_significant_end = offset + ch.len_utf8();
+        } else if ch == '#' {
+            last_significant_end = line.trim_end().len();
+            break;
+        } else if !ch.is_whitespace() {
+            last_significant_end = offset + ch.len_utf8();
+        }
+    }
+    line[..last_significant_end].to_owned()
 }
 
 fn read_source(path: &Path) -> std::io::Result<String> {

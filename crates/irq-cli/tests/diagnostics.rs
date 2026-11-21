@@ -74,6 +74,27 @@ fn lexical_error_has_exact_utf8_byte_span() {
 }
 
 #[test]
+fn parser_expression_error_reports_absolute_span_after_unicode() {
+    let path = std::env::temp_dir().join(format!("irq_parse_span_{}.irq", std::process::id()));
+    let source = "mod span\nfn f() -> i32\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n    return \"مرحبا\" +\n";
+    std::fs::write(&path, source).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_irq"))
+        .arg("check")
+        .arg(&path)
+        .output()
+        .unwrap();
+    let _ = std::fs::remove_file(path);
+    assert!(!output.status.success());
+    let response: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let label = &response["diagnostics"][0]["labels"][0];
+    let expected = source.find('+').unwrap() + 1;
+    assert_eq!(label["start"], expected);
+    assert_eq!(label["end"], expected);
+    assert_eq!(label["line"], 8);
+    assert_eq!(label["column"], 21);
+}
+
+#[test]
 fn cli_rejects_oversized_files_before_reading_them() {
     let path = std::env::temp_dir().join(format!("irq_large_fixture_{}.irq", std::process::id()));
     std::fs::write(&path, vec![b' '; irq_lexer::MAX_SOURCE_BYTES + 1]).unwrap();
@@ -87,6 +108,41 @@ fn cli_rejects_oversized_files_before_reading_them() {
     let response: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(response["diagnostics"][0]["code"], "E0001");
     assert_eq!(response["diagnostics"][0]["kind"], "resource_limit");
+}
+
+#[test]
+fn fmt_is_idempotent_normalizes_crlf_and_preserves_string_contents() {
+    let path = std::env::temp_dir().join(format!("irq_fmt_{}.irq", std::process::id()));
+    let source = "mod demo\r\nfn text() -> str\r\n  reads: none\r\n  writes: none\r\n  requires: true\r\n  ensures: true\r\n  body:\r\n    return \"keep   \"   \r\n\r\n\r\nfn number() -> i32\r\n  reads: none\r\n  writes: none\r\n  requires: true\r\n  ensures: true\r\n  body:\r\n    return 1\r\n";
+    std::fs::write(&path, source).unwrap();
+    let run_fmt = || {
+        Command::new(env!("CARGO_BIN_EXE_irq"))
+            .arg("fmt")
+            .arg(&path)
+            .output()
+            .expect("CLI executable should run")
+    };
+    let first = run_fmt();
+    assert!(first.status.success());
+    let formatted = String::from_utf8(first.stdout).unwrap();
+    assert!(!formatted.contains('\r'));
+    assert!(formatted.contains("return \"keep   \"\n"));
+    assert!(formatted.contains("\n\nfn number()"));
+    let original_ast = irq_parser::parse(source).unwrap();
+    let formatted_ast = irq_parser::parse(&formatted).unwrap();
+    assert_eq!(original_ast.name, formatted_ast.name);
+    assert_eq!(original_ast.functions.len(), formatted_ast.functions.len());
+    for (original, formatted) in original_ast.functions.iter().zip(&formatted_ast.functions) {
+        assert_eq!(original.name, formatted.name);
+        assert_eq!(original.signature, formatted.signature);
+        assert_eq!(original.body, formatted.body);
+    }
+
+    std::fs::write(&path, &formatted).unwrap();
+    let second = run_fmt();
+    let _ = std::fs::remove_file(path);
+    assert!(second.status.success());
+    assert_eq!(second.stdout, formatted.as_bytes());
 }
 
 #[test]
