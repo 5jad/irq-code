@@ -17,6 +17,7 @@ irq-hir = { path = "../irq-hir" }
 irq-codegen-rust = { path = "../irq-codegen-rust" }
 irq-ast = { path = "../irq-ast" }
 irq-diagnostics = { path = "../irq-diagnostics" }
+irq-project = { path = "../irq-project" }
 
 [dev-dependencies]
 serde_json.workspace = true

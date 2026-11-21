@@ -11,7 +11,7 @@ fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
     let command = args.get(1).map(String::as_str).unwrap_or("");
     let valid_args = match command {
-        "check" | "emit-rust" | "fmt" => args.len() == 3,
+        "check" | "check-project" | "emit-rust" | "fmt" => args.len() == 3,
         "build" => args.len() == 4,
         _ => false,
     };
@@ -20,11 +20,15 @@ fn main() -> ExitCode {
             &[Diagnostic::error(
                 codes::INVALID_USAGE,
                 "usage_error",
-                "usage: irq <check|emit-rust|fmt> <file.irq> | irq build <file.irq> <output.rlib>",
+                "usage: irq <check|check-project|emit-rust|fmt> <file.irq|project-dir> | irq build <file.irq> <output.rlib>",
             )],
             &SourceMap::default(),
         );
         return ExitCode::from(2);
+    }
+
+    if command == "check-project" {
+        return check_project(&args[2]);
     }
 
     let input_path = PathBuf::from(&args[2]);
@@ -147,6 +151,102 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
     }
+}
+
+fn check_project(root: &str) -> ExitCode {
+    let project = match irq_project::load_project(root) {
+        Ok(project) => project,
+        Err(error) => {
+            let mut sources = SourceMap::default();
+            let kind = if error.relative_path.is_some() {
+                "parse_error"
+            } else {
+                "project_error"
+            };
+            let diagnostic = Diagnostic::error(error.code, kind, error.message);
+            let diagnostic = if let Some(relative) = error.relative_path {
+                let full_path = Path::new(root).join(&relative);
+                match read_source(&full_path) {
+                    Ok(source) => {
+                        let file_id =
+                            sources.add_file(relative.to_string_lossy().into_owned(), source);
+                        if let Some(span) = error.span {
+                            diagnostic.with_label(Label::primary(
+                                file_id,
+                                ByteSpan {
+                                    start: span.start,
+                                    end: span.end,
+                                },
+                                "here",
+                            ))
+                        } else {
+                            add_line_label(diagnostic, &sources, file_id, error.line.unwrap_or(1))
+                        }
+                    }
+                    Err(_) => diagnostic,
+                }
+            } else {
+                diagnostic
+            };
+            emit_error(&[diagnostic], &sources);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let mut sources = SourceMap::default();
+    let mut diagnostics = Vec::new();
+    for loaded in &project.modules {
+        let path = project.root.join(&loaded.relative_path);
+        let source = match read_source(&path) {
+            Ok(source) => source,
+            Err(error) => {
+                diagnostics.push(Diagnostic::error(
+                    codes::IO_ERROR,
+                    "io_error",
+                    format!("cannot read `{}`: {error}", loaded.relative_path.display()),
+                ));
+                continue;
+            }
+        };
+        let file_id = sources.add_file(loaded.relative_path.to_string_lossy().into_owned(), source);
+        match irq_check::check(&loaded.module) {
+            Ok(()) => {
+                if let Err(error) = irq_hir::lower(&loaded.module) {
+                    diagnostics.push(Diagnostic::error(
+                        codes::TYPE_EXPRESSION,
+                        "hir_lowering_error",
+                        format!("module `{}`: {error}", loaded.module.name),
+                    ));
+                }
+            }
+            Err(errors) => {
+                diagnostics.extend(errors.into_iter().map(|error| {
+                    let diagnostic = Diagnostic::error(error.code, "type_error", error.message);
+                    match loaded
+                        .module
+                        .functions
+                        .iter()
+                        .find(|f| f.name == error.function)
+                    {
+                        Some(function) => {
+                            add_line_label(diagnostic, &sources, file_id, function.line)
+                        }
+                        None => diagnostic,
+                    }
+                }));
+            }
+        }
+    }
+    if !diagnostics.is_empty() {
+        emit_error(&diagnostics, &sources);
+        return ExitCode::FAILURE;
+    }
+    println!(
+        "{{\"status\":\"ok\",\"kind\":\"project_check\",\"phase\":\"per_module_subset\",\"package\":{:?},\"modules\":{},\"not_checked\":[\"cross_module_resolution\",\"imports\",\"privacy\",\"contracts\",\"effects\"]}}",
+        project.manifest.name,
+        project.modules.len()
+    );
+    ExitCode::SUCCESS
 }
 
 /// Applies a stable whitespace-only format after parsing has established syntax validity.

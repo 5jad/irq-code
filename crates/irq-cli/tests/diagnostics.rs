@@ -156,3 +156,97 @@ fn checked_in_schema_matches_response_contract_version() {
     assert_eq!(schema["properties"]["schema_version"]["const"], "1.0.0");
     assert_eq!(schema["$defs"]["diagnostic"]["required"][0], "code");
 }
+
+fn temp_project() -> PathBuf {
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let root =
+        std::env::temp_dir().join(format!("irq_cli_project_{}_{}", std::process::id(), unique));
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(
+        root.join("irq.toml"),
+        "[package]\nname = \"demo\"\nsources = [\"src/main.irq\", \"src/math.irq\"]\n",
+    )
+    .unwrap();
+    root
+}
+
+fn valid_module(name: &str, body: &str) -> String {
+    format!(
+        "mod {name}\n\nfn value() -> i32\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n    return {body}\n"
+    )
+}
+
+#[test]
+fn check_project_checks_each_listed_module_and_reports_limits() {
+    let root = temp_project();
+    std::fs::write(root.join("src/main.irq"), valid_module("main", "1")).unwrap();
+    std::fs::write(root.join("src/math.irq"), valid_module("math", "2")).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_irq"))
+        .arg("check-project")
+        .arg(&root)
+        .output()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(output.status.success());
+    let response: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(response["kind"], "project_check");
+    assert_eq!(response["phase"], "per_module_subset");
+    assert_eq!(response["modules"], 2);
+    assert!(
+        response["not_checked"]
+            .as_array()
+            .unwrap()
+            .contains(&Value::from("cross_module_resolution"))
+    );
+}
+
+#[test]
+fn check_project_type_diagnostic_points_to_the_failing_source_file() {
+    let root = temp_project();
+    std::fs::write(root.join("src/main.irq"), valid_module("main", "1")).unwrap();
+    std::fs::write(
+        root.join("src/math.irq"),
+        "mod math\n\nfn value() -> bool\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n    return 2\n",
+    )
+    .unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_irq"))
+        .arg("check-project")
+        .arg(&root)
+        .output()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(!output.status.success());
+    let response: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let diagnostic = &response["diagnostics"][0];
+    assert_eq!(diagnostic["kind"], "type_error");
+    assert!(
+        diagnostic["labels"][0]["file"]
+            .as_str()
+            .unwrap()
+            .ends_with("src/math.irq")
+    );
+}
+
+#[test]
+fn check_project_parse_diagnostic_uses_the_failing_module_file_and_span() {
+    let root = temp_project();
+    std::fs::write(root.join("src/main.irq"), valid_module("main", "1")).unwrap();
+    let bad = "mod math\n\nfn value() -> i32\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n    return 2 +\n";
+    std::fs::write(root.join("src/math.irq"), bad).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_irq"))
+        .arg("check-project")
+        .arg(&root)
+        .output()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(!output.status.success());
+    let response: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let diagnostic = &response["diagnostics"][0];
+    let label = &diagnostic["labels"][0];
+    assert_eq!(diagnostic["kind"], "parse_error");
+    assert!(label["file"].as_str().unwrap().ends_with("src/math.irq"));
+    assert_eq!(label["start"], bad.find('+').unwrap() + 1);
+}

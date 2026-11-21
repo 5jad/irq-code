@@ -13,6 +13,7 @@ dependencies = [
  "irq-hir",
  "irq-lexer",
  "irq-parser",
+ "irq-project",
  "serde_json",
 ]
 

@@ -40,7 +40,7 @@
 
 - [ ] بناء AST مكتمل للميزات المدعومة، مع spans لكل عقدة؛ loader وحده لا يحقق هذا البند.
 - [ ] تثبيت صيغة `irq.toml` كصيغة مشروع حقيقية مستقرة (أو اعتماد parser TOML مناسب)، مع قفل dependencies وإصداراتها وقواعد reproducible build؛ الحالي manifest محدود وتجريبي.
-- [ ] ربط `irq-project` بالـCLI وأوامر project-level، وإظهار diagnostics مع الملف وموضع الخطأ لكل مصدر.
+- [x] إضافة `irq check-project <dir>` وربط loader بالـCLI؛ يفحص parse/type/HIR لكل وحدة ويعرض diagnostic مع مسار المصدر وموضع parse إن توفر. لا يعني هذا تنفيذ حل الرموز بين الوحدات.
 - [ ] حسم نسخة/ملف profile الذي يسمح بالوحدات المتعددة و`use`؛ مواصفة 0.1 الحالية تستبعدهما، فلا تُعدّل 0.1 بصمت.
 - [ ] تنفيذ `use` وفق نحو ودلالة موثقين للنسخة المختارة، بما في ذلك aliases إن اعتُمدت.
 - [ ] بناء module graph حتمي، وحل أسماء الوحدات والرموز والاستيرادات العابرة للملفات.
@@ -143,7 +143,7 @@
 
 ## المرحلة 11 — CLI والتوزيع
 
-- [ ] إضافة أوامر `new`, `run`, `test`, `effects`, `doc`؛ الأمر `fmt` موجود حالياً بنطاق محافظ، وتبقى توسعته قراراً منفصلاً.
+- [ ] إضافة أوامر `new`, `run`, `test`, `effects`, `doc`؛ `check-project` أضيف بنطاق per-module subset، و`fmt` موجود حالياً بنطاق محافظ.
 - [ ] تثبيت صيغة مشروع وقفل dependencies وإصداراتها وبناء reproducible.
 - [ ] إدارة نسخ compiler وstdlib بما يمنع بناءً غير حتمي.
 - [ ] استكمال diagnostics JSON والتحقق منه مقابل schema في جميع الأوامر.
@@ -198,6 +198,7 @@
 | التاريخ | المرحلة/البند | الدليل (اختبار/ملف/commit) | ملاحظة |
 |---|---|---|---|
 | 2026-11-21 | المرحلة 3: loader أولي | `irq-project` tests; commit `0174d6d` | manifest subset وتحميل ملفات فقط؛ لا cross-module resolution |
+| 2026-11-21 | المرحلة 3/11: `irq check-project` | اختبارات `check_project_checks_each_listed_module_and_reports_limits`, `check_project_type_diagnostic_points_to_the_failing_source_file`, `check_project_parse_diagnostic_uses_the_failing_module_file_and_span`; workspace test/clippy/fmt | يفحص كل وحدة مستقلة؛ imports/privacy/cross-module resolution غير مدعومة |
 
 ## آلية تحديث TODO2 بعد كل دفعة
 

@@ -38,6 +38,9 @@ pub struct Project {
 pub struct ProjectError {
     pub code: &'static str,
     pub message: String,
+    pub relative_path: Option<PathBuf>,
+    pub line: Option<usize>,
+    pub span: Option<irq_lexer::Span>,
 }
 
 impl fmt::Display for ProjectError {
@@ -51,6 +54,9 @@ fn error(code: &'static str, message: impl Into<String>) -> ProjectError {
     ProjectError {
         code,
         message: message.into(),
+        relative_path: None,
+        line: None,
+        span: None,
     }
 }
 
@@ -242,11 +248,12 @@ pub fn load_project(root: impl AsRef<Path>) -> Result<Project, ProjectError> {
                 format!("cannot read source `{}`: {e}", relative_path.display()),
             )
         })?;
-        let module = irq_parser::parse(&source).map_err(|e| {
-            error(
-                "IRQ-PROJECT-PARSE",
-                format!("{}:{}: {}", relative_path.display(), e.line, e.message),
-            )
+        let module = irq_parser::parse(&source).map_err(|e| ProjectError {
+            code: e.code,
+            message: e.message,
+            relative_path: Some(relative_path.clone()),
+            line: Some(e.line),
+            span: e.span,
         })?;
         if !names.insert(module.name.clone()) {
             return Err(error(
