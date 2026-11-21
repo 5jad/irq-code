@@ -218,6 +218,15 @@ impl ExprParser {
 }
 
 pub fn parse(source: &str) -> Result<Module, ParseError> {
+    parse_inner(source).map_err(|mut parse_error| {
+        if parse_error.span.is_none() {
+            parse_error.span = Some(line_span(source, parse_error.line));
+        }
+        parse_error
+    })
+}
+
+fn parse_inner(source: &str) -> Result<Module, ParseError> {
     irq_lexer::lex(source).map_err(|e| ParseError {
         code: e.code,
         line: e.span.line,
@@ -459,6 +468,34 @@ pub fn parse(source: &str) -> Result<Module, ParseError> {
         name: name.to_owned(),
         functions,
     })
+}
+
+fn line_span(source: &str, target_line: usize) -> irq_lexer::Span {
+    let mut offset = 0usize;
+    for (index, segment) in source.split_inclusive('\n').enumerate() {
+        if index + 1 == target_line {
+            let mut end = offset + segment.len();
+            if segment.ends_with('\n') {
+                end -= 1;
+                if end > offset && source.as_bytes()[end - 1] == b'\r' {
+                    end -= 1;
+                }
+            }
+            return irq_lexer::Span {
+                start: offset,
+                end,
+                line: target_line,
+                column: 1,
+            };
+        }
+        offset += segment.len();
+    }
+    irq_lexer::Span {
+        start: source.len(),
+        end: source.len(),
+        line: target_line,
+        column: 1,
+    }
 }
 
 fn strip_comment(line: &str) -> &str {
@@ -1061,6 +1098,25 @@ mod tests {
         let source = format!("{}{}", VALID, " ".repeat(irq_lexer::MAX_SOURCE_BYTES));
         let error = parse(&source).unwrap_err();
         assert_eq!(error.code, codes::SOURCE_TOO_LARGE);
+    }
+
+    #[test]
+    fn structural_errors_receive_utf8_byte_spans_on_crlf_sources() {
+        let source = "# تعليق عربي\r\nmod 123\r\n";
+        let error = parse(source).unwrap_err();
+        assert!(error.message.contains("invalid module declaration"));
+        let span = error.span.unwrap();
+        assert_eq!(span.start, "# تعليق عربي\r\n".len());
+        assert_eq!(span.end, span.start + "mod 123".len());
+        assert_eq!(span.line, 2);
+        assert_eq!(span.column, 1);
+
+        let source = "mod demo\r\nfn missing_arrow() i32\r\n";
+        let error = parse(source).unwrap_err();
+        let span = error.span.unwrap();
+        assert_eq!(span.start, "mod demo\r\n".len());
+        assert_eq!(span.end, source.trim_end_matches("\r\n").len());
+        assert_eq!(span.line, 2);
     }
 
     #[test]

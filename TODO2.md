@@ -26,7 +26,7 @@
 
 - [ ] إكمال lexer وتغطية كل الكلمات والعوامل وصيغ الأعداد والسلاسل وescapes وUTF-8 حسب grammar المعيارية؛ اختبارات corpus تغطي الرموز الحالية والأعداد والمعرفات وUTF-8/escapes وCRLF. عولج أيضاً CRLF في التعليقات كي يغطي newline token بايتي الزوج، مع رفض CR المنفرد داخل التعليق. corpus القواعد المعيارية والحالات غير المدعومة ما زال مطلوباً.
 - [ ] استبدال parser السطري بـtoken-based parser يطبق القواعد الرسمية والسياقات والمسافات دون الاعتماد على قصّ الأسطر.
-- [ ] إكمال `source spans` لكل عقد AST وكل أخطاء lexer/parser البنيوية، مع byte offsets UTF-8 ومواقع صحيحة بعد النصوص متعددة البايتات.
+- [ ] إكمال `source spans` لكل عقد AST وكل أخطاء lexer/parser البنيوية، مع byte offsets UTF-8 ومواقع صحيحة بعد النصوص متعددة البايتات؛ أخطاء parser البنيوية التي كانت بلا span تحصل الآن على نطاق سطر المصدر (مع CRLF وUTF-8)، لكن spans لكل عقد AST وبعض التشخيصات التفصيلية ما زالت غير منفذة.
 - [x] دعم `()` كنوع وقيمة في AST/parser/checker/HIR/Rust backend، بما يشمل parameter/local/return، واختبار قبول ورفض النوع غير المطابق واختبار تجميع وتشغيل للكود المولد. لا يعني هذا دعم `Result` أو اكتمال المرحلة 2.
 - [ ] دعم `Result<T,E>` و`ok` و`err` و`try` و`match` exhaustive وفق الدلالة المعيارية، مع رفض إسقاط النتائج.
 - [ ] إكمال تعليمات وتعابير 0.1 المتبقية اللازمة لهذا النطاق، بما فيها match blocks؛ لا تُضاف `for`, `break`, collections أو fields إلى 0.1 دون قرار موثق لأنها خارج نطاقه حالياً.
@@ -205,6 +205,7 @@
 | 2026-11-21 | المرحلة 2: دعم unit `()` end-to-end | `cargo test --locked --workspace`، `cargo clippy --locked --workspace --all-targets -- -D warnings`، `cargo fmt --all -- --check`، جميع أمثلة IRQ و`git diff --check` | دعم parameter/local/return والقيمة `()`، ورفض return غير المطابق، ونجاح codegen compile/run؛ لا يغلق المرحلة 2 |
 | 2026-11-21 | المرحلة 2: توسيع corpus lexer | `cargo test --locked -p irq-lexer` (13 اختباراً) | تغطية كل token kinds الحالية والأعداد والمعرفات وUTF-8/escapes؛ لا يثبت بعد مطابقة lexer للـgrammar كاملة |
 | 2026-11-21 | المرحلة 2: تصحيح CRLF في التعليقات | `cargo test --locked -p irq-lexer` وworkspace test/clippy/fmt والأمثلة و`git diff --check` | لم يعد مسح التعليقات يستهلك CR قبل معالجة newline؛ يغطي الاختبار الزوج كاملاً ويرفض CR المنفرد |
+| 2026-11-21 | المرحلة 2: spans لأخطاء parser البنيوية | اختبار `structural_errors_receive_utf8_byte_spans_on_crlf_sources` واختبارات parser؛ workspace test/clippy/fmt والأمثلة و`git diff --check` | إرفاق نطاق سطر للمشكلات البنيوية التي كانت بلا span؛ لا يغطي spans لعقد AST ولا يحدد دائماً الرمز الدقيق المسبب |
 
 ## آلية تحديث TODO2 بعد كل دفعة
 
