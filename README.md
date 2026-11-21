@@ -21,6 +21,7 @@
 
 - [المواصفة المعيارية لـIRQ 0.1](docs/irq-0.1-language-spec.md)
 - [TODO وخارطة المراحل](TODO.md)
+- [TODO 2 — سجل النواقص المتبقية وبوابات الإكمال](TODO2.md)
 - [ملخص نطاق التنفيذ الحالي](docs/irq-mvp-spec.md)
 - [قواعد EBNF للـsubset المنفذ حالياً](docs/implemented-subset.ebnf)
 - [بحث أخطاء الكود المولد ومخاطره الأمنية](docs/ai-code-risk-research.md)
