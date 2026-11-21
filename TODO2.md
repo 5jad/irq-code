@@ -24,7 +24,7 @@
 
 ## المرحلة 2 — Lexer وParser
 
-- [ ] إكمال lexer وتغطية كل الكلمات والعوامل وصيغ الأعداد والسلاسل وescapes وUTF-8 حسب grammar المعيارية؛ أضيف اختبار CRLF يغطي الزوج كاملاً في newline span ورفض CR المنفرد، لكن corpus lexer الكامل ما زال مطلوباً.
+- [ ] إكمال lexer وتغطية كل الكلمات والعوامل وصيغ الأعداد والسلاسل وescapes وUTF-8 حسب grammar المعيارية؛ أضيفت اختبارات صريحة لكل عوامل/ترقيم lexer الحالي، الأعداد العشرية والمعرفات وUTF-8 والـescapes المدعومة، إضافة لاختبار CRLF وCR المنفرد. corpus القواعد المعيارية والحالات غير المدعومة ما زال مطلوباً.
 - [ ] استبدال parser السطري بـtoken-based parser يطبق القواعد الرسمية والسياقات والمسافات دون الاعتماد على قصّ الأسطر.
 - [ ] إكمال `source spans` لكل عقد AST وكل أخطاء lexer/parser البنيوية، مع byte offsets UTF-8 ومواقع صحيحة بعد النصوص متعددة البايتات.
 - [x] دعم `()` كنوع وقيمة في AST/parser/checker/HIR/Rust backend، بما يشمل parameter/local/return، واختبار قبول ورفض النوع غير المطابق واختبار تجميع وتشغيل للكود المولد. لا يعني هذا دعم `Result` أو اكتمال المرحلة 2.
@@ -203,6 +203,7 @@
 | 2026-11-21 | المرحلة 3/11: `irq check-project` | اختبارات `check_project_checks_each_listed_module_and_reports_limits`, `check_project_type_diagnostic_points_to_the_failing_source_file`, `check_project_parse_diagnostic_uses_the_failing_module_file_and_span`; workspace test/clippy/fmt | يفحص كل وحدة مستقلة؛ imports/privacy/cross-module resolution غير مدعومة |
 | 2026-11-21 | المرحلة 2: parser/lexer conformance slice | `ebnf_conformance` (2 tests)، اختبارات lexer/parser، workspace test/clippy/fmt والأمثلة | إصلاح رفض top-level content وCRLF spans؛ لا يغلق المرحلة 2 |
 | 2026-11-21 | المرحلة 2: دعم unit `()` end-to-end | `cargo test --locked --workspace`، `cargo clippy --locked --workspace --all-targets -- -D warnings`، `cargo fmt --all -- --check`، جميع أمثلة IRQ و`git diff --check` | دعم parameter/local/return والقيمة `()`، ورفض return غير المطابق، ونجاح codegen compile/run؛ لا يغلق المرحلة 2 |
+| 2026-11-21 | المرحلة 2: توسيع corpus lexer | `cargo test --locked -p irq-lexer` (13 اختباراً) | تغطية كل token kinds الحالية والأعداد والمعرفات وUTF-8/escapes؛ لا يثبت بعد مطابقة lexer للـgrammar كاملة |
 
 ## آلية تحديث TODO2 بعد كل دفعة
 

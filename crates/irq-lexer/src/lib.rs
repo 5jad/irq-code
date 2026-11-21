@@ -444,6 +444,47 @@ mod tests {
     }
 
     #[test]
+    fn lexes_every_supported_punctuation_and_operator() {
+        let tokens = lex(" : , ( ) [ ] -> = == != < <= > >= + - * / % | & ").unwrap();
+        let kinds: Vec<TokenKind> = tokens.into_iter().map(|token| token.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Colon,
+                TokenKind::Comma,
+                TokenKind::LParen,
+                TokenKind::RParen,
+                TokenKind::LBracket,
+                TokenKind::RBracket,
+                TokenKind::Arrow,
+                TokenKind::Eq,
+                TokenKind::EqEq,
+                TokenKind::NotEq,
+                TokenKind::Lt,
+                TokenKind::Le,
+                TokenKind::Gt,
+                TokenKind::Ge,
+                TokenKind::Plus,
+                TokenKind::Minus,
+                TokenKind::Star,
+                TokenKind::Slash,
+                TokenKind::Percent,
+                TokenKind::Pipe,
+                TokenKind::Amp,
+                TokenKind::Eof,
+            ]
+        );
+    }
+
+    #[test]
+    fn lexes_ascii_identifiers_decimal_integers_and_all_supported_string_escapes() {
+        let tokens = lex("name_2 0123 \"عربي\\n\\t\\r\\\"\\\\\"").unwrap();
+        assert_eq!(tokens[0].kind, TokenKind::Ident("name_2".into()));
+        assert_eq!(tokens[1].kind, TokenKind::Number("0123".into()));
+        assert_eq!(tokens[2].kind, TokenKind::String("عربي\n\t\r\"\\".into()));
+    }
+
+    #[test]
     fn rejects_oversized_source_before_scanning() {
         let source = "x".repeat(MAX_SOURCE_BYTES + 1);
         let error = lex(&source).unwrap_err();
