@@ -28,16 +28,19 @@ logical_or   = logical_and, { "or", logical_and } ;
 logical_and  = comparison, { "and", comparison } ;
 comparison   = sum, { ( "==" | "!=" | "<" | "<=" | ">" | ">=" ), sum } ;
 sum          = product, { ( "+" | "-" ), product } ;
-product      = unary, { ( "*" | "/" ), unary } ;
+product      = unary, { ( "*" | "/" | "%" ), unary } ;
 unary        = ( "not" | "-" ), unary | call | primary ;
 call         = identifier, "(", [ arguments ], ")" ;
 arguments    = expression, { ",", expression } ;
 primary      = integer | string | "true" | "false" | identifier | "(", expression, ")" ;
 string       = '"', { character | escape }, '"' ;
 escape       = "\\n" | "\\t" | "\\r" | "\\\"" | "\\\\" ;
+identifier   = ASCII letter or "_", { ASCII letter | digit | "_" }, excluding reserved words ;
 ```
 
-`indent(n)` تعني بالضبط `n` مسافة في جسم الدالة؛ هذه grammar بصيغة EBNF موسعة لأنها تستخدم وسيط العمق `n` لتعريف الكتل المتداخلة. توجد فجوات توافق مع المواصفة الرسمية: parser الحالي لا يفرض مسافة أقسام التوقيع بدقة، ويقصّ النص عند `#` قبل تحليل السطر (لذلك `#` داخل string لا يعمل كما يجب)، ولا يرفض جميع الكلمات المحجوزة كأسماء. تُعالج هذه الفجوات في مرحلة parser ولا تُعد تغييراً في دلالة IRQ.
+`indent(n)` تعني بالضبط `n` مسافة في جسم الدالة؛ هذه grammar بصيغة EBNF موسعة لأنها تستخدم وسيط العمق `n` لتعريف الكتل المتداخلة. التنفيذ الحالي يحمي `#` داخل السلاسل، يقبل تعليقات الأسطر المستقلة فقط، ويرفض الكلمات المحجوزة كأسماء ويراجع indentation لرأس الوحدة/الدوال وأقسام التوقيع. لا تزال القواعد تُنفذ عبر parser سطري لا عبر token grammar كاملة؛ قد تبقى فجوات في whitespace والسياقات النحوية وتُتابع في المرحلة 2.
+
+الكلمات المحجوزة المعروفة للـprofile الحالي والمخطط هي `mod`, `pub`, `fn`, `reads`, `writes`, `requires`, `ensures`, `body`, `none`, `let`, `mut`, `if`, `else`, `while`, `return`, `or`, `and`, `not`, `true`, `false`, `i32`, `u32`, `i64`, `u64`, `bool`, `str`, `Result`, `use`, `const`, `struct`, `enum`, `errdef`, `test`, `for`, `break`, `old`, `null`, `opt`, `match`, `try`, `ok`, و`err`.
 
 ## القيود الحالية
 
@@ -48,8 +51,8 @@ escape       = "\\n" | "\\t" | "\\r" | "\\\"" | "\\\\" ;
 - أسماء الدوال تستدعى محلياً داخل الوحدة فقط؛ لا يوجد `use` أو modules متعددة الملفات. استدعاء التعبير يسمح باسم دالة فقط.
 - `if/else` يمكن أن يرجع من الفرعين، أو يستمر من كليهما، أو يرجع من فرع ويستمر من الآخر إذا وجد `return` لاحق. `while` قد تنفذ صفراً أو أكثر من المرات ولا تثبت وحدها رجوع الدالة؛ لذلك يلزم return قابل للوصول بعد الحلقة. لا يوجد `break` حالياً.
 - هذا subset لا يضم `for`, `match`, field access، generics، structs/enums، error propagation، أو contract expressions.
-- `a / b` مع مقام ثابت محسوب إلى صفر يُرفض ساكناً. Rust emitter للـsubset يحول العمليات العددية المدعومة إلى `checked_*` ويرجع `IrqRuntimeError` للـoverflow والمقام الديناميكي الصفري؛ `irq check` وحده لا يشغل هذه الفحوص.
+- `a / b` و`a % b` مع مقام ثابت محسوب إلى صفر يُرفضان ساكناً. Rust emitter للـsubset يحول العمليات العددية المدعومة إلى `checked_*` ويرجع `IrqRuntimeError` للـoverflow والمقام الديناميكي الصفري؛ `irq check` وحده لا يشغل هذه الفحوص.
 
 ## أسبقية العمليات
 
-من الأضعف إلى الأقوى: `or`, `and`, المقارنات، `+ -`, `* /`, ثم unary `not` و`-`. المحلل يستخدم Pratt parser؛ العمليات في المستوى الواحد تُحلل يسارياً. يفضل عدم كتابة مقارنات متسلسلة مثل `a < b < c` إلى أن تضبط دلالاتها صراحة.
+من الأضعف إلى الأقوى: `or`, `and`, المقارنات، `+ -`, `* / %`, ثم unary `not` و`-`. المحلل يستخدم Pratt parser؛ العمليات في المستوى الواحد تُحلل يسارياً. يفضل عدم كتابة مقارنات متسلسلة مثل `a < b < c` إلى أن تضبط دلالاتها صراحة.

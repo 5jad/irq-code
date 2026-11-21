@@ -90,6 +90,9 @@ impl ExprParser {
                 op: UnaryOp::Not,
                 value: Box::new(self.expression(11)?),
             },
+            TokenKind::Ident(ref n) if is_reserved(n) => {
+                return Err(self.err(&format!("reserved word `{n}` cannot be used as a name")));
+            }
             TokenKind::Ident(n) => Expression::Name(n),
             TokenKind::Minus => Expression::Unary {
                 op: UnaryOp::Negate,
@@ -140,6 +143,7 @@ impl ExprParser {
                 TokenKind::Minus => (BinaryOp::Subtract, 7, 8),
                 TokenKind::Star => (BinaryOp::Multiply, 9, 10),
                 TokenKind::Slash => (BinaryOp::Divide, 9, 10),
+                TokenKind::Percent => (BinaryOp::Remainder, 9, 10),
                 _ => break,
             };
             if l < min_bp {
@@ -164,23 +168,32 @@ pub fn parse(source: &str) -> Result<Module, ParseError> {
         message: e.message,
         span: Some(e.span),
     })?;
+    for (index, raw) in source.lines().enumerate() {
+        let prefix: String = raw
+            .chars()
+            .take_while(|ch| *ch == ' ' || *ch == '\t')
+            .collect();
+        if prefix.contains('\t') {
+            return Err(error(index + 1, "tabs are not allowed in indentation"));
+        }
+    }
     let rows: Vec<(usize, &str)> = source
         .lines()
         .enumerate()
-        .map(|(i, s)| (i + 1, s.split('#').next().unwrap_or("").trim_end()))
+        .map(|(i, s)| (i + 1, strip_comment(s).trim_end()))
         .filter(|(_, s)| !s.trim().is_empty())
         .collect();
     let Some((mod_line, first)) = rows.first().copied() else {
         return Err(error(1, "file is empty; expected `mod name`"));
     };
-    let mut parts = first.split_whitespace();
-    if parts.next() != Some("mod") {
-        return Err(error(mod_line, "file must start with `mod name`"));
+    if first.starts_with(' ') || first.starts_with('\t') {
+        return Err(error(mod_line, "module declaration must not be indented"));
     }
-    let name = parts
-        .next()
-        .ok_or_else(|| error(mod_line, "module name is missing"))?;
-    if !valid_ident(name) || parts.next().is_some() {
+    let Some(module_name) = first.strip_prefix("mod ") else {
+        return Err(error(mod_line, "file must start with `mod name`"));
+    };
+    let name = module_name.trim();
+    if !valid_ident(name) {
         return Err(error(mod_line, "invalid module declaration"));
     }
 
@@ -189,6 +202,9 @@ pub fn parse(source: &str) -> Result<Module, ParseError> {
     while i < rows.len() {
         let (line, text) = rows[i];
         let trimmed = text.trim();
+        if text.starts_with(' ') || text.starts_with('\t') {
+            return Err(error(line, "function declaration must not be indented"));
+        }
         let signature = if let Some(s) = trimmed.strip_prefix("pub fn ") {
             s
         } else if let Some(s) = trimmed.strip_prefix("fn ") {
@@ -266,6 +282,13 @@ pub fn parse(source: &str) -> Result<Module, ParseError> {
                 .iter()
                 .find(|k| section.starts_with(**k))
             {
+                let indent = rows[i].1.len() - rows[i].1.trim_start_matches(' ').len();
+                if indent != 2 {
+                    return Err(error(
+                        rows[i].0,
+                        "function signature sections must use exactly two leading spaces",
+                    ));
+                }
                 let key = key.trim_end_matches(':');
                 if sections.iter().any(|(existing, _)| *existing == key) {
                     return Err(error(rows[i].0, &format!("duplicate `{key}:` section")));
@@ -327,10 +350,80 @@ pub fn parse(source: &str) -> Result<Module, ParseError> {
     })
 }
 
+fn strip_comment(line: &str) -> &str {
+    let mut quoted = false;
+    let mut escaped = false;
+    for (offset, ch) in line.char_indices() {
+        if quoted {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                quoted = false;
+            }
+        } else if ch == '"' {
+            quoted = true;
+        } else if ch == '#' {
+            return &line[..offset];
+        }
+    }
+    line
+}
+
 fn valid_ident(s: &str) -> bool {
     let mut c = s.chars();
     matches!(c.next(), Some(x) if x.is_ascii_alphabetic() || x == '_')
         && c.all(|x| x.is_ascii_alphanumeric() || x == '_')
+        && !is_reserved(s)
+}
+
+fn is_reserved(s: &str) -> bool {
+    matches!(
+        s,
+        "mod"
+            | "pub"
+            | "fn"
+            | "reads"
+            | "writes"
+            | "requires"
+            | "ensures"
+            | "body"
+            | "none"
+            | "let"
+            | "mut"
+            | "if"
+            | "else"
+            | "while"
+            | "return"
+            | "or"
+            | "and"
+            | "not"
+            | "true"
+            | "false"
+            | "i32"
+            | "u32"
+            | "i64"
+            | "u64"
+            | "bool"
+            | "str"
+            | "Result"
+            | "use"
+            | "const"
+            | "struct"
+            | "enum"
+            | "errdef"
+            | "test"
+            | "for"
+            | "break"
+            | "old"
+            | "null"
+            | "opt"
+            | "match"
+            | "try"
+            | "ok"
+            | "err"
+    )
 }
 
 fn parse_block(
@@ -366,6 +459,7 @@ fn parse_block(
         {
             let condition = parse_expression(condition.trim()).map_err(|mut e| {
                 e.line = line;
+                e.span = None;
                 e
             })?;
             *cursor += 1;
@@ -402,6 +496,7 @@ fn parse_block(
         {
             let condition = parse_expression(condition.trim()).map_err(|mut e| {
                 e.line = line;
+                e.span = None;
                 e
             })?;
             *cursor += 1;
@@ -423,6 +518,7 @@ fn parse_statement(source: &str, line: usize) -> Result<Statement, ParseError> {
         return Ok(Statement::Return(parse_expression(expr).map_err(
             |mut e| {
                 e.line = line;
+                e.span = None;
                 e
             },
         )?));
@@ -447,6 +543,7 @@ fn parse_statement(source: &str, line: usize) -> Result<Statement, ParseError> {
         }
         let value = parse_expression(rhs.trim()).map_err(|mut e| {
             e.line = line;
+            e.span = None;
             e
         })?;
         return Ok(Statement::Let {
@@ -463,6 +560,7 @@ fn parse_statement(source: &str, line: usize) -> Result<Statement, ParseError> {
         if valid_ident(name) {
             let value = parse_expression(rhs.trim()).map_err(|mut e| {
                 e.line = line;
+                e.span = None;
                 e
             })?;
             return Ok(Statement::Assign {
@@ -527,9 +625,31 @@ mod tests {
     }
 
     #[test]
+    fn remainder_shares_multiplicative_precedence_and_is_left_associative() {
+        let parsed = parse_expression("20 % 6 * 2").unwrap();
+        assert!(
+            matches!(parsed, Expression::Binary { op: BinaryOp::Multiply, ref left, .. }
+            if matches!(**left, Expression::Binary { op: BinaryOp::Remainder, .. }))
+        );
+        let chained = parse_expression("20 % 6 % 4").unwrap();
+        assert!(
+            matches!(chained, Expression::Binary { op: BinaryOp::Remainder, ref left, .. }
+            if matches!(**left, Expression::Binary { op: BinaryOp::Remainder, .. }))
+        );
+    }
+
+    #[test]
     fn rejects_incomplete_expression() {
         assert!(parse_expression("1 +").is_err());
         assert!(parse_expression("true false").is_err());
+    }
+
+    #[test]
+    fn embedded_expression_errors_keep_correct_line_without_fake_file_offset() {
+        let source = VALID.replace("return 0", "return 0 +");
+        let error = parse(&source).unwrap_err();
+        assert_eq!(error.line, 9);
+        assert_eq!(error.span, None);
     }
 
     #[test]
@@ -551,6 +671,97 @@ mod tests {
     fn parses_unicode_string_literals_and_escapes() {
         let expression = parse_expression("\"مرحبا\\nIRQ\"").unwrap();
         assert_eq!(expression, Expression::String("مرحبا\nIRQ".into()));
+    }
+
+    #[test]
+    fn hash_inside_string_is_not_treated_as_comment() {
+        let source = VALID
+            .replace("-> i32", "-> str")
+            .replace("ensures: result == 0", "ensures: true")
+            .replace("return 0", "return \"left#right\"");
+        let module = parse(&source).unwrap();
+        assert!(matches!(
+            module.functions[0].body.as_slice(),
+            [Statement::Return(Expression::String(value))] if value == "left#right"
+        ));
+    }
+
+    #[test]
+    fn rejects_reserved_words_as_module_function_parameter_and_local_names() {
+        assert!(
+            parse(&VALID.replace("mod demo", "mod return"))
+                .unwrap_err()
+                .message
+                .contains("invalid module declaration")
+        );
+        assert!(
+            parse(&VALID.replace("fn main()", "fn return()"))
+                .unwrap_err()
+                .message
+                .contains("invalid function name")
+        );
+        let parameter = VALID.replace("main()", "main(return: i32)");
+        assert!(
+            parse(&parameter)
+                .unwrap_err()
+                .message
+                .contains("invalid parameter name")
+        );
+        let local = VALID.replace("    return 0", "    let mut: i32 = 0\n    return 0");
+        assert!(parse(&local).is_err());
+        assert!(
+            parse_expression("match")
+                .unwrap_err()
+                .message
+                .contains("reserved word")
+        );
+    }
+
+    #[test]
+    fn rejects_every_reserved_word_as_a_function_identifier() {
+        let reserved = [
+            "mod", "pub", "fn", "reads", "writes", "requires", "ensures", "body", "none", "let",
+            "mut", "if", "else", "while", "return", "or", "and", "not", "true", "false", "i32",
+            "u32", "i64", "u64", "bool", "str", "Result", "use", "const", "struct", "enum",
+            "errdef", "test", "for", "break", "old", "null", "opt", "match", "try", "ok", "err",
+        ];
+        for word in reserved {
+            let source = VALID.replace("fn main()", &format!("fn {word}()"));
+            assert!(
+                parse(&source).is_err(),
+                "reserved function name accepted: {word}"
+            );
+        }
+        assert!(parse(&VALID.replace("fn main()", "fn return_value()")).is_ok());
+    }
+
+    #[test]
+    fn requires_module_function_and_signature_sections_at_canonical_indentation() {
+        assert!(
+            parse(&VALID.replace("mod demo", "  mod demo"))
+                .unwrap_err()
+                .message
+                .contains("module declaration must not be indented")
+        );
+        assert!(
+            parse(&VALID.replace("pub fn main()", "  pub fn main()"))
+                .unwrap_err()
+                .message
+                .contains("function declaration must not be indented")
+        );
+        assert!(
+            parse(&VALID.replace("  reads:", "    reads:"))
+                .unwrap_err()
+                .message
+                .contains("exactly two leading spaces")
+        );
+        assert!(
+            parse(&VALID.replace("  reads:", "\treads:"))
+                .unwrap_err()
+                .message
+                .contains("tabs are not allowed")
+        );
+        assert!(parse(&VALID.replace("mod demo", "mod\tdemo")).is_err());
     }
 
     #[test]

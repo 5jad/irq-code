@@ -224,7 +224,11 @@ fn emit_binary(
 ) -> Result<String, CodegenError> {
     if matches!(
         op,
-        BinaryOp::Add | BinaryOp::Subtract | BinaryOp::Multiply | BinaryOp::Divide
+        BinaryOp::Add
+            | BinaryOp::Subtract
+            | BinaryOp::Multiply
+            | BinaryOp::Divide
+            | BinaryOp::Remainder
     ) {
         let ty = numeric_operand_type(left, right, hint, env, signatures)?;
         let l = emit_expr(left, Some(&ty), env, signatures)?;
@@ -234,9 +238,10 @@ fn emit_binary(
             BinaryOp::Subtract => "checked_sub",
             BinaryOp::Multiply => "checked_mul",
             BinaryOp::Divide => "checked_div",
+            BinaryOp::Remainder => "checked_rem",
             _ => unreachable!(),
         };
-        let zero_check = if op == BinaryOp::Divide {
+        let zero_check = if matches!(op, BinaryOp::Divide | BinaryOp::Remainder) {
             "if __irq_r == 0 { return Err(IrqRuntimeError::DivisionByZero); } "
         } else {
             ""
@@ -318,7 +323,12 @@ fn expression_type(
             value,
         } => expression_type(value, env, signatures),
         Expression::Binary {
-            op: BinaryOp::Add | BinaryOp::Subtract | BinaryOp::Multiply | BinaryOp::Divide,
+            op:
+                BinaryOp::Add
+                | BinaryOp::Subtract
+                | BinaryOp::Multiply
+                | BinaryOp::Divide
+                | BinaryOp::Remainder,
             left,
             right,
         } => numeric_operand_type(left, right, None, env, signatures),
@@ -336,7 +346,11 @@ fn is_constant_integer(expr: &Expression) -> bool {
         Expression::Binary { left, op, right } => {
             matches!(
                 op,
-                BinaryOp::Add | BinaryOp::Subtract | BinaryOp::Multiply | BinaryOp::Divide
+                BinaryOp::Add
+                    | BinaryOp::Subtract
+                    | BinaryOp::Multiply
+                    | BinaryOp::Divide
+                    | BinaryOp::Remainder
             ) && is_constant_integer(left)
                 && is_constant_integer(right)
         }
@@ -373,6 +387,9 @@ mod tests {
         let irq = format!(
             "{irq}fn count_to_three() -> i32\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n    let mut n: i32 = 0\n    while n < 3:\n      n = n + 1\n    return n\n"
         );
+        let irq = format!(
+            "{irq}fn remainder(a: i32, b: i32) -> i32\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n    return a % b\n"
+        );
         let module = irq_parser::parse(&irq).unwrap();
         irq_check::check(&module).unwrap();
         let generated = emit(&module).unwrap();
@@ -388,6 +405,9 @@ mod generated_tests {
     #[test] fn unsigned_overflow_is_returned() { assert_eq!(__irq_add_u64(u64::MAX, 1), Err(IrqRuntimeError::Overflow)); }
     #[test] fn division_by_zero_is_returned() { assert_eq!(__irq_divide(8, 0), Err(IrqRuntimeError::DivisionByZero)); }
     #[test] fn signed_division_overflow_is_returned() { assert_eq!(__irq_divide(i32::MIN, -1), Err(IrqRuntimeError::Overflow)); }
+    #[test] fn ordinary_remainder() { assert_eq!(__irq_remainder(17, 5), Ok(2)); }
+    #[test] fn remainder_by_zero_is_returned() { assert_eq!(__irq_remainder(8, 0), Err(IrqRuntimeError::DivisionByZero)); }
+    #[test] fn signed_remainder_overflow_is_returned() { assert_eq!(__irq_remainder(i32::MIN, -1), Err(IrqRuntimeError::Overflow)); }
     #[test] fn signed_minimum_literal_is_preserved() { assert_eq!(__irq_min_i64(), Ok(i64::MIN)); }
     #[test] fn unicode_string_round_trips() { assert_eq!(__irq_greeting(), Ok(String::from("مرحبا"))); }
     #[test] fn string_comparison_does_not_consume_value() { assert_eq!(__irq_compare_return(String::from("مرحبا")), Ok(String::from("مرحبا"))); }

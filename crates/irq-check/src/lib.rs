@@ -439,13 +439,22 @@ fn infer(
         }
         Expression::Binary { left, op, right } => {
             let (l, r) = infer_numeric_pair(left, right, env, signatures)?;
-            if *op == BinaryOp::Divide && const_int(right) == Some(0) {
+            if matches!(op, BinaryOp::Divide | BinaryOp::Remainder) && const_int(right) == Some(0) {
                 return Err("division by a compile-time zero divisor".into());
             }
             match op {
-                BinaryOp::Add | BinaryOp::Subtract | BinaryOp::Multiply | BinaryOp::Divide => {
+                BinaryOp::Add
+                | BinaryOp::Subtract
+                | BinaryOp::Multiply
+                | BinaryOp::Divide
+                | BinaryOp::Remainder => {
                     if l == r && integer_type(&l) {
                         if is_const_integer(expr) {
+                            if has_const_signed_division_overflow(expr, &l) {
+                                return Err(
+                                    "compile-time signed division or remainder overflow".into()
+                                );
+                            }
                             let value = const_int(expr)
                                 .ok_or_else(|| "compile-time integer overflow".to_owned())?;
                             if !fits_integer(value, &l) {
@@ -543,6 +552,7 @@ fn const_int(expr: &Expression) -> Option<i128> {
                 BinaryOp::Subtract => l.checked_sub(r),
                 BinaryOp::Multiply => l.checked_mul(r),
                 BinaryOp::Divide => l.checked_div(r),
+                BinaryOp::Remainder => l.checked_rem(r),
                 _ => None,
             }
         }
@@ -558,7 +568,10 @@ fn infer_expected(
 ) -> Result<String, String> {
     if integer_type(expected) && is_const_integer(expr) {
         if has_const_zero_divisor(expr) {
-            return Err("division by a compile-time zero divisor".into());
+            return Err("division or remainder by a compile-time zero divisor".into());
+        }
+        if has_const_signed_division_overflow(expr, expected) {
+            return Err("compile-time signed division or remainder overflow".into());
         }
         let value = const_int(expr).ok_or_else(|| "compile-time integer overflow".to_owned())?;
         if !fits_integer(value, expected) {
@@ -591,7 +604,11 @@ fn is_const_integer(expr: &Expression) -> bool {
         Expression::Binary { left, op, right } => {
             matches!(
                 op,
-                BinaryOp::Add | BinaryOp::Subtract | BinaryOp::Multiply | BinaryOp::Divide
+                BinaryOp::Add
+                    | BinaryOp::Subtract
+                    | BinaryOp::Multiply
+                    | BinaryOp::Divide
+                    | BinaryOp::Remainder
             ) && is_const_integer(left)
                 && is_const_integer(right)
         }
@@ -599,10 +616,30 @@ fn is_const_integer(expr: &Expression) -> bool {
     }
 }
 
+fn has_const_signed_division_overflow(expr: &Expression, ty: &str) -> bool {
+    match expr {
+        Expression::Binary { left, op, right } => {
+            let min = match ty {
+                "i32" => Some(i32::MIN as i128),
+                "i64" => Some(i64::MIN as i128),
+                _ => None,
+            };
+            (matches!(op, BinaryOp::Divide | BinaryOp::Remainder)
+                && min.is_some_and(|min| {
+                    const_int(left) == Some(min) && const_int(right) == Some(-1)
+                }))
+                || has_const_signed_division_overflow(left, ty)
+                || has_const_signed_division_overflow(right, ty)
+        }
+        Expression::Unary { value, .. } => has_const_signed_division_overflow(value, ty),
+        _ => false,
+    }
+}
+
 fn has_const_zero_divisor(expr: &Expression) -> bool {
     match expr {
         Expression::Binary { left, op, right } => {
-            (*op == BinaryOp::Divide && const_int(right) == Some(0))
+            (matches!(op, BinaryOp::Divide | BinaryOp::Remainder) && const_int(right) == Some(0))
                 || has_const_zero_divisor(left)
                 || has_const_zero_divisor(right)
         }
@@ -616,7 +653,7 @@ mod tests {
     use super::*;
     use irq_parser::parse;
     fn program(body: &str) -> Module {
-        parse(&format!("mod test\nfn calc(a: i32) -> i32\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n{body}\n")).unwrap()
+        parse(&format!("mod checkmod\nfn calc(a: i32) -> i32\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n{body}\n")).unwrap()
     }
     #[test]
     fn accepts_typed_mutable_local_and_return() {
@@ -659,6 +696,23 @@ mod tests {
             computed
                 .iter()
                 .any(|e| e.message.contains("compile-time zero divisor"))
+        );
+    }
+
+    #[test]
+    fn checks_remainder_constants_zero_divisor_and_signed_overflow() {
+        assert!(check(&program("    return 17 % 5")).is_ok());
+        let zero = check(&program("    return 8 % (3 - 3)")).unwrap_err();
+        assert!(
+            zero.iter()
+                .any(|e| e.message.contains("compile-time zero divisor"))
+        );
+        let overflow_source = "mod edge\nfn calc() -> i32\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n    return -2147483648 % -1\n";
+        let overflow = check(&parse(overflow_source).unwrap()).unwrap_err();
+        assert!(
+            overflow
+                .iter()
+                .any(|e| e.message.contains("signed division or remainder overflow"))
         );
     }
 

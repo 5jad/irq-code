@@ -80,6 +80,7 @@ pub fn lex(source: &str) -> Result<Vec<Token>, LexError> {
         .chain(std::iter::once(source.len()))
         .collect();
     let (mut i, mut line, mut col) = (0usize, 1usize, 1usize);
+    let mut line_has_code = false;
     let mut out = Vec::new();
     while i < chars.len() {
         let start = i;
@@ -91,6 +92,18 @@ pub fn lex(source: &str) -> Result<Vec<Token>, LexError> {
             continue;
         }
         if c == '#' {
+            if line_has_code {
+                return Err(LexError {
+                    code: codes::LEX_ERROR,
+                    message: "comments must occupy a line by themselves".into(),
+                    span: Span {
+                        start: byte_offsets[start],
+                        end: byte_offsets[start + 1],
+                        line,
+                        column: col,
+                    },
+                });
+            }
             while i < chars.len() && chars[i] != '\n' {
                 i += 1;
                 col += 1;
@@ -104,6 +117,7 @@ pub fn lex(source: &str) -> Result<Vec<Token>, LexError> {
             i += 1;
             line += 1;
             col = 1;
+            line_has_code = false;
             out.push(Token {
                 kind: TokenKind::Newline,
                 span: Span {
@@ -247,6 +261,7 @@ pub fn lex(source: &str) -> Result<Vec<Token>, LexError> {
                 column: start_col,
             },
         });
+        line_has_code = true;
     }
     out.push(Token {
         kind: TokenKind::Eof,
@@ -303,10 +318,18 @@ mod tests {
     use super::*;
     #[test]
     fn lexes_signature_and_skips_comment() {
-        let ts = lex("fn add(a: i32) -> i32 # hi\n").unwrap();
-        assert_eq!(ts[0].kind, TokenKind::Ident("fn".into()));
+        let ts = lex("# hi\nfn add(a: i32) -> i32\n").unwrap();
+        assert_eq!(ts[0].kind, TokenKind::Newline);
+        assert_eq!(ts[1].kind, TokenKind::Ident("fn".into()));
         assert!(ts.iter().any(|t| t.kind == TokenKind::Arrow));
         assert!(ts.iter().any(|t| t.kind == TokenKind::Newline));
+    }
+
+    #[test]
+    fn rejects_inline_comment_after_code() {
+        let error = lex("return 0 # not a comment line").unwrap_err();
+        assert_eq!(error.code, codes::LEX_ERROR);
+        assert!(error.message.contains("line by themselves"));
     }
     #[test]
     fn rejects_unterminated_string() {

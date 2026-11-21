@@ -60,7 +60,7 @@ cargo run -p irq -- build examples/checked_arithmetic.irq /tmp/libchecked_arithm
 - يدعم `while` بشرط `bool` وكتلة متداخلة، ويعيد backend تقييم الشرط في كل دورة. الحلقة قد لا تعمل مطلقاً، فلا تُعدّ دليلاً على رجوع الدالة؛ `break` و`for` وتحليل invariants/control-flow الكامل غير متاحة.
 - لا تزال `match` والحقول والمجموعات غير مدعومة في parser الحالي.
 - يوجد فاحص أنواع أولي للأنواع scalar والمتغيرات والإسناد وقيمة `return`؛ ليس نظام أنواع كاملاً.
-- يفحص المجال العددي للثوابت بحسب النوع المتوقع ويرفض القسمة على صفر الثابتة؛ Rust backend يستخدم checked arithmetic ويرجع `IrqRuntimeError` عند overflow أو القسمة الديناميكية على صفر.
+- يفحص المجال العددي للثوابت بحسب النوع المتوقع ويرفض القسمة أو باقي القسمة على صفر الثابتة؛ Rust backend يستخدم `checked_*` للحساب و`%` ويرجع `IrqRuntimeError` عند overflow أو القسمة/باقي القسمة الديناميكي على صفر.
 - `irq check` يشغّل parse وفاحص الأنواع scalar وشرط/جسم `while` للـsubset ويرجع JSON يذكر ما فُحص وما لم يُفحص.
 - `irq emit-rust` يرفض الملف إذا فشل parse/typecheck ثم يولّد Rust مستقلاً للـsubset.
 - `irq build <file.irq> <output.rlib>` يشغّل `rustc` تلقائياً ويخرج مكتبة Rust للـsubset؛ لا ينشئ executable ولا يشغّل البرنامج. يترجم إلى ملف مؤقت بجانب الهدف ثم يستبدل الناتج بعد نجاح الترجمة فقط.
