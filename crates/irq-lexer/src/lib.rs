@@ -86,10 +86,46 @@ pub fn lex(source: &str) -> Result<Vec<Token>, LexError> {
         let start = i;
         let (start_line, start_col) = (line, col);
         let c = chars[i];
-        if c == ' ' || c == '\t' || c == '\r' {
+        if c == ' ' || c == '\t' {
             i += 1;
             col += 1;
             continue;
+        }
+        if c == '\r' {
+            if chars.get(i + 1) == Some(&'\n') {
+                if out.len() >= MAX_TOKENS {
+                    return Err(token_limit_error(
+                        byte_offsets[start],
+                        byte_offsets[start + 2],
+                        start_line,
+                        start_col,
+                    ));
+                }
+                i += 2;
+                out.push(Token {
+                    kind: TokenKind::Newline,
+                    span: Span {
+                        start: byte_offsets[start],
+                        end: byte_offsets[i],
+                        line: start_line,
+                        column: start_col,
+                    },
+                });
+                line += 1;
+                col = 1;
+                line_has_code = false;
+                continue;
+            }
+            return Err(LexError {
+                code: codes::LEX_ERROR,
+                message: "carriage return is only valid as part of CRLF".into(),
+                span: Span {
+                    start: byte_offsets[start],
+                    end: byte_offsets[start + 1],
+                    line,
+                    column: col,
+                },
+            });
         }
         if c == '#' {
             if line_has_code {
@@ -344,6 +380,27 @@ mod tests {
         assert_eq!(error.code, codes::LEX_ERROR);
         assert!(error.message.contains("line by themselves"));
     }
+
+    #[test]
+    fn treats_crlf_as_one_newline_span_and_rejects_bare_carriage_return() {
+        let source = "a\r\nb";
+        let tokens = lex(source).unwrap();
+        let newline = tokens
+            .iter()
+            .find(|token| token.kind == TokenKind::Newline)
+            .unwrap();
+        assert_eq!(newline.span.start, 1);
+        assert_eq!(newline.span.end, 3);
+        assert_eq!(newline.span.line, 1);
+        assert_eq!(newline.span.column, 2);
+
+        let error = lex("a\rb").unwrap_err();
+        assert_eq!(error.code, codes::LEX_ERROR);
+        assert_eq!(error.span.start, 1);
+        assert_eq!(error.span.end, 2);
+        assert!(error.message.contains("only valid as part of CRLF"));
+    }
+
     #[test]
     fn rejects_unterminated_string() {
         assert!(lex("\"oops").is_err());

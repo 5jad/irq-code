@@ -1,0 +1,47 @@
+use irq_parser::parse;
+
+const NORMATIVE_PROGRAM: &str = "mod demo\n\npub fn answer() -> i32\n  reads: none\n  writes: none\n  requires: true\n  ensures: result == 42\n  body:\n    return 42\n";
+
+fn function(body: &str) -> String {
+    format!(
+        "mod conformance\n\nfn sample() -> i32\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n{body}\n"
+    )
+}
+
+#[test]
+fn accepts_normative_minimal_program_and_supported_ebnf_forms() {
+    assert!(parse(NORMATIVE_PROGRAM).is_ok());
+    assert!(parse(&function("    return (1 + 2) * 3")).is_ok());
+    assert!(parse(&function("    return 1 % 2")).is_ok());
+    assert!(parse(&function("    return not false == true")).is_ok());
+    assert!(parse(&function("    return \"IRQ مرحبا\"")).is_ok()); // نحوي صحيح؛ فحص النوع مرحلة منفصلة
+}
+
+#[test]
+fn rejects_normative_invalid_examples_at_parse_time() {
+    let missing_writes = NORMATIVE_PROGRAM.replace("  writes: none\n", "");
+    let duplicate_reads =
+        NORMATIVE_PROGRAM.replace("  writes: none\n", "  reads: none\n  writes: none\n");
+    let reserved_function = NORMATIVE_PROGRAM.replace("answer", "return");
+    let non_ascii_module = NORMATIVE_PROGRAM.replace("mod demo", "mod café");
+    let tab_indentation = NORMATIVE_PROGRAM.replace("  reads:", "\treads:");
+    let missing_else = function("    if true:\n      return 1");
+    let chained_comparison = function("    return 1 < 2 < 3");
+    let top_level_statement = format!("{NORMATIVE_PROGRAM}return 0\n");
+
+    for (name, source) in [
+        ("missing writes", missing_writes),
+        ("duplicate reads", duplicate_reads),
+        ("reserved function name", reserved_function),
+        ("non-ASCII module name", non_ascii_module),
+        ("tab indentation", tab_indentation),
+        ("missing else", missing_else),
+        ("chained comparison", chained_comparison),
+        ("top-level statement", top_level_statement),
+    ] {
+        assert!(
+            parse(&source).is_err(),
+            "accepted normative rejection: {name}"
+        );
+    }
+}

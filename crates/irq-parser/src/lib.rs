@@ -429,6 +429,18 @@ pub fn parse(source: &str) -> Result<Module, ParseError> {
                 "function body must contain at least one supported statement",
             ));
         }
+        if body_cursor < rows.len() {
+            let (next_line, next_text) = rows[body_cursor];
+            let next_trimmed = next_text.trim_start();
+            let is_next_function = next_text.len() == next_trimmed.len()
+                && (next_trimmed.starts_with("fn ") || next_trimmed.starts_with("pub fn "));
+            if !is_next_function {
+                return Err(error(
+                    next_line,
+                    "unexpected content outside a function body",
+                ));
+            }
+        }
         functions.push(Function {
             name: fn_name.to_owned(),
             signature: trimmed.to_owned(),
