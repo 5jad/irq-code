@@ -140,7 +140,9 @@ pub fn lex(source: &str) -> Result<Vec<Token>, LexError> {
                     },
                 });
             }
-            while i < chars.len() && chars[i] != '\n' {
+            // Leave either newline byte for the main scanner so CRLF is
+            // emitted as one token whose span covers both bytes.
+            while i < chars.len() && chars[i] != '\n' && chars[i] != '\r' {
                 i += 1;
                 col += 1;
             }
@@ -399,6 +401,26 @@ mod tests {
         assert_eq!(error.span.start, 1);
         assert_eq!(error.span.end, 2);
         assert!(error.message.contains("only valid as part of CRLF"));
+    }
+
+    #[test]
+    fn comment_ending_in_crlf_preserves_the_full_newline_span() {
+        let source = "# note\r\nname";
+        let tokens = lex(source).unwrap();
+        let newline = tokens
+            .iter()
+            .find(|token| token.kind == TokenKind::Newline)
+            .unwrap();
+        assert_eq!(newline.span.start, source.find('\r').unwrap());
+        assert_eq!(newline.span.end, source.find('\n').unwrap() + 1);
+        assert_eq!(tokens[1].kind, TokenKind::Ident("name".into()));
+    }
+
+    #[test]
+    fn rejects_bare_carriage_return_inside_comment() {
+        let error = lex("# note\rnext").unwrap_err();
+        assert_eq!(error.span.start, "# note".len());
+        assert_eq!(error.span.end, error.span.start + 1);
     }
 
     #[test]
