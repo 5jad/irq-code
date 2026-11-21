@@ -1141,4 +1141,26 @@ mod tests {
             assert!(std::panic::catch_unwind(|| parse_expression(&input)).is_ok());
         }
     }
+
+    #[test]
+    fn deterministic_mutations_of_valid_modules_never_panic() {
+        let seed = "mod fuzz\nfn echo(value: i32) -> i32\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n    let copy: i32 = value\n    if copy > 0:\n      return copy\n    else:\n      return 0\n";
+        let alphabet = [
+            ' ', '\n', '#', '(', ')', ':', ',', '-', '>', '=', '0', 'x', 'ع',
+        ];
+        let mut state = 0xabad1dea_u64;
+        for iteration in 0..2_000 {
+            let mut input = seed.as_bytes().to_vec();
+            for _ in 0..1 + (iteration % 3) {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                let index = (state as usize) % input.len();
+                let replacement = alphabet[(state.rotate_left(17) as usize) % alphabet.len()];
+                input[index] = replacement as u8;
+            }
+            let input = String::from_utf8(input).expect("mutations preserve UTF-8 boundaries");
+            assert!(std::panic::catch_unwind(|| parse(&input)).is_ok());
+        }
+    }
 }

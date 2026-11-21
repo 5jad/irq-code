@@ -31,7 +31,7 @@
 - [ ] دعم `Result<T,E>` و`ok` و`err` و`try` و`match` exhaustive وفق الدلالة المعيارية، مع رفض إسقاط النتائج.
 - [ ] إكمال تعليمات وتعابير 0.1 المتبقية اللازمة لهذا النطاق، بما فيها match blocks؛ لا تُضاف `for`, `break`, collections أو fields إلى 0.1 دون قرار موثق لأنها خارج نطاقه حالياً.
 - [ ] إضافة استعادة من أخطاء parsing لعرض عدة أخطاء مستقلة ومفيدة في الدورة الواحدة دون أخطاء متسلسلة مضللة.
-- [ ] توسيع corpus قبول/رفض EBNF ليغطي كل القواعد مع malformed/fuzz أقوى من deterministic smoke؛ أضيفت حالياً اختبارات لعينة من المثال المعياري وحالات الرفض المعروفة.
+- [ ] توسيع corpus قبول/رفض EBNF ليغطي كل القواعد مع malformed/fuzz أقوى من deterministic smoke؛ أضيفت حالياً حالات معيارية أساسية، وأخطاء بنيوية، واختبار deterministic mutations لـ2,000 نسخة مشوهة من برنامج IRQ صالح. ما زالت grammar-generated tests وحملة fuzz مستمرة مطلوبة.
 - [ ] جعل formatter أوسع من التطبيع المحافظ الحالي إذا تقرر ذلك، مع اختبارات تثبت ثبات المعنى وidempotence؛ أو توثيق النطاق الحالي كافياً إن لم يكن مطلوباً formatter كامل.
 
 **بوابة الإغلاق:** كل أمثلة IRQ 0.1 النحوية المقبولة تُحلل، وكل أمثلة الرفض تُرفض مع spans دقيقة، وتنجح اختبارات التوافق وfuzz المحددة.
@@ -206,6 +206,7 @@
 | 2026-11-21 | المرحلة 2: توسيع corpus lexer | `cargo test --locked -p irq-lexer` (13 اختباراً) | تغطية كل token kinds الحالية والأعداد والمعرفات وUTF-8/escapes؛ لا يثبت بعد مطابقة lexer للـgrammar كاملة |
 | 2026-11-21 | المرحلة 2: تصحيح CRLF في التعليقات | `cargo test --locked -p irq-lexer` وworkspace test/clippy/fmt والأمثلة و`git diff --check` | لم يعد مسح التعليقات يستهلك CR قبل معالجة newline؛ يغطي الاختبار الزوج كاملاً ويرفض CR المنفرد |
 | 2026-11-21 | المرحلة 2: spans لأخطاء parser البنيوية | اختبار `structural_errors_receive_utf8_byte_spans_on_crlf_sources` واختبارات parser؛ workspace test/clippy/fmt والأمثلة و`git diff --check` | إرفاق نطاق سطر للمشكلات البنيوية التي كانت بلا span؛ لا يغطي spans لعقد AST ولا يحدد دائماً الرمز الدقيق المسبب |
+| 2026-11-21 | المرحلة 2: fuzz تشويهي لبرنامج صالح | `deterministic_mutations_of_valid_modules_never_panic` (2,000 mutation)، workspace test/clippy/fmt والأمثلة و`git diff --check` | يوسّع smoke للتشويه البنيوي، وليس بديلاً عن cargo-fuzz/property-based أو تغطية grammar كاملة |
 
 ## آلية تحديث TODO2 بعد كل دفعة
 
