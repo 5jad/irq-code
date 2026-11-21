@@ -8,6 +8,7 @@ members = [
   "crates/irq-check",
   "crates/irq-hir",
   "crates/irq-codegen-rust",
+  "crates/irq-project",
   "crates/irq-cli",
 ]
 

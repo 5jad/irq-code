@@ -26,6 +26,7 @@
 - [بحث أخطاء الكود المولد ومخاطره الأمنية](docs/ai-code-risk-research.md)
 - [عقد كتابة IRQ بواسطة نماذج AI](docs/ai-authoring-contract.md)
 - [سياسة MSRV والتبعيات](docs/dependency-policy.md)
+- [صيغة المشروع التجريبية وتحميل irq.toml](docs/project-format.md)
 - [حالة HIR وحدود نموذج الملكية](docs/hir-and-ownership.md)
 - [JSON Schema للتشخيصات](docs/diagnostic.schema.json)
 
@@ -60,6 +61,7 @@ cargo run -p irq -- build examples/checked_arithmetic.irq /tmp/libchecked_arithm
 - يدعم parser استدعاءات الدوال المحلية البسيطة، ويفحص وجودها وأنواع/عدد معاملاتها.
 - يرفض سلاسل المقارنة المتتابعة وفق EBNF، ويدعم `irq fmt` كتطبيع محافظ للنهايات والمسافات الخارجية؛ لا يعيد formatter صياغة expressions.
 - أخطاء parsing داخل تعبيرات الأسطر تعرض absolute UTF-8 byte spans؛ spans لكل AST node وأخطاء structural ذات token ranges ما زالت غير مكتملة.
+- أضيفت حزمة `irq-project` لتحميل قائمة مصادر متعددة من `irq.toml` بصيغة manifest محدودة والتحقق من حدود المسارات وتكرار أسماء الوحدات؛ لم تُربط بعد بأمر CLI ولا تنفذ `use` أو حل الأسماء بين الوحدات.
 - يدعم `if/else` المتداخل بشرط `bool` وتصريحات/إسنادات محلية بنطاق مستقل. يمكن للفرعين الرجوع أو الاستمرار، كما يمكن لمسار واحد أن يرجع والآخر يكمل بشرط أن يصل الأخير لاحقاً إلى `return`.
 - يدعم `while` بشرط `bool` وكتلة متداخلة، ويعيد backend تقييم الشرط في كل دورة. الحلقة قد لا تعمل مطلقاً، فلا تُعدّ دليلاً على رجوع الدالة؛ `break` و`for` وتحليل invariants/control-flow الكامل غير متاحة.
 - لا تزال `match` والحقول والمجموعات غير مدعومة في parser الحالي.

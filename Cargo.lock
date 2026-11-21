@@ -71,6 +71,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "irq-project"
+version = "0.1.0"
+dependencies = [
+ "irq-ast",
+ "irq-lexer",
+ "irq-parser",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
