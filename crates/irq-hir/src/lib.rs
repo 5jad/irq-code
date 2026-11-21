@@ -8,6 +8,7 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
+    Unit,
     I32,
     I64,
     U32,
@@ -19,6 +20,7 @@ pub enum Type {
 impl Type {
     fn parse(name: &str) -> Result<Self, LowerError> {
         match name {
+            "()" => Ok(Self::Unit),
             "i32" => Ok(Self::I32),
             "i64" => Ok(Self::I64),
             "u32" => Ok(Self::U32),
@@ -76,6 +78,7 @@ pub struct Expression {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExpressionKind {
+    Unit,
     Integer(i128),
     Boolean(bool),
     String(String),
@@ -230,6 +233,7 @@ fn lower_expr(
 ) -> Result<Expression, LowerError> {
     use ast::Expression as E;
     let (ty, kind) = match expr {
+        E::Unit => (Type::Unit, ExpressionKind::Unit),
         E::Integer(value) => (
             hint.cloned().unwrap_or(Type::I32),
             ExpressionKind::Integer(*value),
@@ -344,6 +348,7 @@ fn expression_type(
     signatures: &Signatures,
 ) -> Result<Type, LowerError> {
     match expr {
+        ast::Expression::Unit => Ok(Type::Unit),
         ast::Expression::Integer(_) => Ok(Type::I32),
         ast::Expression::Boolean(_) => Ok(Type::Bool),
         ast::Expression::String(_) => Ok(Type::Str),

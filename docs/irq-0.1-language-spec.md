@@ -17,7 +17,7 @@ IRQ 0.1 هو profile صغير أحادي الوحدة، مصمم لتوليد ب
 | المجال | قرار IRQ 0.1 | حالة المترجم الحالي |
 | --- | --- | --- |
 | الملف والوحدة | وحدة واحدة، دوال مرتبة، أقسام توقيع ثابتة | مدعوم جزئياً |
-| الأنواع | الأنواع الأساسية أعلاه، بما فيها `()` | scalar `i32/i64/u32/u64/bool/str`؛ `()` غير مدعوم بعد |
+| الأنواع | الأنواع الأساسية أعلاه، بما فيها `()` | scalar `i32/i64/u32/u64/bool/str` و`()` مدعومة في subset الحالي |
 | التحكم | `if/else`, `while`; لا `for` ولا `break` | `if/else` و`while` subset مدعومان |
 | الحساب | checked semantics المبينة في §6 | checked add/sub/mul/div/neg في Rust backend؛ الفاحص يرفض بعض الثوابت غير الصالحة |
 | الأخطاء | `Result<T,E>` صريح؛ لا إسقاط للخطأ | backend يحول أخطاء الحساب إلى `Result` داخلي، لكن لا يوجد `try`/`ok`/`err`/`match` مصدري حتى الآن |
@@ -217,7 +217,7 @@ fn use_add() -> i32
 
 الأمثلة السابقة هي normative examples للغة 0.1. أمثلة parser/typechecker المنفذة حالياً في `examples/` واختبارات الوحدات تمثل executable subset أصغر. قبل تعليم أي syntax بـ`[x]` في خارطة التنفيذ، يجب أن توجد اختبارات compile-pass وcompile-fail تغطيه. لا تخلط بين اختبار grammar النظري واختبار المترجم.
 
-الفجوات المعروفة التي يجب معالجتها لاحقاً تشمل: unit type، Result syntax وhandling، match، reserved-word enforcement الشامل، grammar-generated/conformance tests، دقة التعليقات داخل string، source spans لكل عقدة، contracts/effects checks، وقراءة الأقسام/التنسيق وفق القواعد أعلاه.
+الفجوات المعروفة التي يجب معالجتها لاحقاً تشمل: Result syntax وhandling، match، reserved-word enforcement الشامل، grammar-generated/conformance tests، دقة التعليقات داخل string، source spans لكل عقدة، contracts/effects checks، وقراءة الأقسام/التنسيق وفق القواعد أعلاه. دعم `()` منفذ في subset واختباره، ولا يعني اكتمال بقية grammar المعيارية.
 
 ## 11. حواجز الأمان والادعاءات
 

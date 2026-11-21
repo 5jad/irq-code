@@ -14,7 +14,7 @@ section(name)= name, ":", { any_non_newline_character } ;
  hspace      = { " " | "\t" } ;
 parameters   = parameter, { ",", parameter } ;
 parameter    = identifier, ":", type ;
-type         = nonempty_text ;
+type         = "()" | nonempty_text ;
 block(n)     = indent(n), statement(n), { newline, indent(n), statement(n) } ;
 statement(n) = let_stmt | assignment | return_stmt | if_stmt(n) | while_stmt(n) ;
 let_stmt     = "let", [ "mut" ], identifier, ":", type, "=", expression ;
@@ -32,7 +32,7 @@ product      = unary, { ( "*" | "/" | "%" ), unary } ;
 unary        = ( "not" | "-" ), unary | call | primary ;
 call         = identifier, "(", [ arguments ], ")" ;
 arguments    = expression, { ",", expression } ;
-primary      = integer | string | "true" | "false" | identifier | "(", expression, ")" ;
+primary      = integer | string | "true" | "false" | identifier | "()" | "(", expression, ")" ;
 string       = '"', { character | escape }, '"' ;
 escape       = "\\n" | "\\t" | "\\r" | "\\\"" | "\\\\" ;
 identifier   = ASCII letter or "_", { ASCII letter | digit | "_" }, excluding reserved words ;
@@ -46,7 +46,7 @@ identifier   = ASCII letter or "_", { ASCII letter | digit | "_" }, excluding re
 
 - الملف يحتوي وحدة واحدة ودالة واحدة أو أكثر. كل دالة يجب أن تحتوي أقسام التوقيع بالترتيب المبين، مرة واحدة لكل قسم. النص داخل أقسام العقود والآثار لا يُفسر دلالياً حالياً.
 - `if` يتطلب `else`، وكل كتلة `if` و`while` غير فارغة. المستوى الأعلى داخل جسم الدالة يبدأ بأربع مسافات، ويزيد التداخل بمسافتين لكل مستوى؛ أي indentation آخر مرفوض حالياً.
-- فاحص الأنواع يدعم `i32`, `i64`, `u32`, `u64`, `bool`, و`str` كأسماء أنواع. string literals تدعم UTF-8 escapes المحددة أعلاه؛ نوع القيمة المعادة `()` غير مدعوم بعد.
+- فاحص الأنواع يدعم `i32`, `i64`, `u32`, `u64`, `bool`, و`str` إضافةً إلى النوع والقيمة `()`؛ يمكن استعمال unit في annotations للمعاملات والمحليات والإرجاع. string literals تدعم UTF-8 escapes المحددة أعلاه.
 - الأعداد الصحيحة literals غير المسندة إلى سياق نوعي يكون نوعها الافتراضي `i32`؛ في سياق عددي متوقع تُفحص الثوابت ضمن `i32`/`i64`/`u32`/`u64`. يخزن AST القيمة مؤقتاً كـ`i128` كي يمثّل حدود الأنواع المستهدفة قبل فحصها.
 - أسماء الدوال تستدعى محلياً داخل الوحدة فقط؛ لا يوجد `use` أو modules متعددة الملفات. استدعاء التعبير يسمح باسم دالة فقط.
 - `if/else` يمكن أن يرجع من الفرعين، أو يستمر من كليهما، أو يرجع من فرع ويستمر من الآخر إذا وجد `return` لاحق. `while` قد تنفذ صفراً أو أكثر من المرات ولا تثبت وحدها رجوع الدالة؛ لذلك يلزم return قابل للوصول بعد الحلقة. لا يوجد `break` حالياً.

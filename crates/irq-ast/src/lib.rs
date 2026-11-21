@@ -48,6 +48,7 @@ pub enum Statement {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expression {
+    Unit,
     Integer(i128),
     Boolean(bool),
     String(String),

@@ -101,6 +101,10 @@ impl ExprParser {
                 value: Box::new(self.expression(11)?),
             },
             TokenKind::LParen => {
+                if matches!(self.peek(), TokenKind::RParen) {
+                    self.take();
+                    return Ok(Expression::Unit);
+                }
                 let e = self.expression(0)?;
                 if !matches!(self.take(), TokenKind::RParen) {
                     return Err(self.err("expected `)`"));
@@ -274,9 +278,7 @@ pub fn parse(source: &str) -> Result<Module, ParseError> {
         if !valid_ident(fn_name) {
             return Err(error(line, "invalid function name"));
         }
-        let close = signature[open..]
-            .find(')')
-            .map(|n| n + open)
+        let close = matching_paren(signature, open)
             .ok_or_else(|| error(line, "expected `)` in function signature"))?;
         let return_tail = signature[close + 1..].trim_start_matches(' ');
         if return_tail == &signature[close + 1..]
@@ -478,6 +480,23 @@ fn strip_comment(line: &str) -> &str {
         }
     }
     line
+}
+
+fn matching_paren(text: &str, open: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for (relative, ch) in text[open..].char_indices() {
+        match ch {
+            '(' => depth += 1,
+            ')' => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return Some(open + relative);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 fn valid_ident(s: &str) -> bool {
@@ -803,6 +822,15 @@ mod tests {
     fn rejects_incomplete_expression() {
         assert!(parse_expression("1 +").is_err());
         assert!(parse_expression("true false").is_err());
+    }
+
+    #[test]
+    fn parses_unit_expression_and_grouped_expression_separately() {
+        assert_eq!(parse_expression("()").unwrap(), Expression::Unit);
+        assert_eq!(
+            parse_expression("(1 + 2)").unwrap(),
+            parse_expression("1 + 2").unwrap()
+        );
     }
 
     #[test]

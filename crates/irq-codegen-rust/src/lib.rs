@@ -158,6 +158,7 @@ fn emit_expr(
     signatures: &Signatures,
 ) -> Result<String, CodegenError> {
     match expr {
+        Expression::Unit => Ok("()".into()),
         Expression::Integer(n) => {
             let ty = hint.unwrap_or("i32");
             Ok(format!("{n}{ty}"))
@@ -304,6 +305,7 @@ fn expression_type(
     signatures: &Signatures,
 ) -> Result<String, CodegenError> {
     match expr {
+        Expression::Unit => Ok("()".into()),
         Expression::Integer(_) => Ok("i32".into()),
         Expression::Boolean(_) => Ok("bool".into()),
         Expression::String(_) => Ok("str".into()),
@@ -360,6 +362,7 @@ fn is_constant_integer(expr: &Expression) -> bool {
 
 fn rust_type(ty: &str) -> Result<&'static str, CodegenError> {
     match ty {
+        "()" => Ok("()"),
         "i32" => Ok("i32"),
         "i64" => Ok("i64"),
         "u32" => Ok("u32"),
@@ -390,6 +393,9 @@ mod tests {
         let irq = format!(
             "{irq}fn remainder(a: i32, b: i32) -> i32\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n    return a % b\n"
         );
+        let irq = format!(
+            "{irq}fn echo_unit(value: ()) -> ()\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n    return value\nfn make_unit() -> ()\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n    return ()\n"
+        );
         let module = irq_parser::parse(&irq).unwrap();
         irq_check::check(&module).unwrap();
         let generated = emit(&module).unwrap();
@@ -413,6 +419,7 @@ mod generated_tests {
     #[test] fn string_comparison_does_not_consume_value() { assert_eq!(__irq_compare_return(String::from("مرحبا")), Ok(String::from("مرحبا"))); }
     #[test] fn boolean_precedence_matches_irq_ast() { assert_eq!(__irq_bool_expr(true, false, false), Ok(false)); }
     #[test] fn while_rechecks_condition_and_mutates_outer_local() { assert_eq!(__irq_count_to_three(), Ok(3)); }
+    #[test] fn unit_value_is_preserved() { assert_eq!(__irq_echo_unit(()), Ok(())); assert_eq!(__irq_make_unit(), Ok(())); }
 }
 "#;
         let id = std::process::id();

@@ -209,7 +209,7 @@ pub fn check(module: &Module) -> Result<(), Vec<CheckError>> {
 }
 
 fn supported_type(ty: &str) -> bool {
-    matches!(ty, "i32" | "i64" | "u32" | "u64" | "bool" | "str")
+    matches!(ty, "i32" | "i64" | "u32" | "u64" | "bool" | "str" | "()")
 }
 
 fn check_return_branch(
@@ -370,6 +370,7 @@ fn infer(
     signatures: &HashMap<String, (Vec<String>, String)>,
 ) -> Result<String, String> {
     match expr {
+        Expression::Unit => Ok("()".into()),
         Expression::Integer(n) => {
             if fits_integer(*n, "i32") {
                 Ok("i32".into())

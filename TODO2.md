@@ -27,7 +27,7 @@
 - [ ] إكمال lexer وتغطية كل الكلمات والعوامل وصيغ الأعداد والسلاسل وescapes وUTF-8 حسب grammar المعيارية؛ أضيف اختبار CRLF يغطي الزوج كاملاً في newline span ورفض CR المنفرد، لكن corpus lexer الكامل ما زال مطلوباً.
 - [ ] استبدال parser السطري بـtoken-based parser يطبق القواعد الرسمية والسياقات والمسافات دون الاعتماد على قصّ الأسطر.
 - [ ] إكمال `source spans` لكل عقد AST وكل أخطاء lexer/parser البنيوية، مع byte offsets UTF-8 ومواقع صحيحة بعد النصوص متعددة البايتات.
-- [ ] دعم `()` في الأنواع والتعابير والرجوع من الدوال.
+- [x] دعم `()` كنوع وقيمة في AST/parser/checker/HIR/Rust backend، بما يشمل parameter/local/return، واختبار قبول ورفض النوع غير المطابق واختبار تجميع وتشغيل للكود المولد. لا يعني هذا دعم `Result` أو اكتمال المرحلة 2.
 - [ ] دعم `Result<T,E>` و`ok` و`err` و`try` و`match` exhaustive وفق الدلالة المعيارية، مع رفض إسقاط النتائج.
 - [ ] إكمال تعليمات وتعابير 0.1 المتبقية اللازمة لهذا النطاق، بما فيها match blocks؛ لا تُضاف `for`, `break`, collections أو fields إلى 0.1 دون قرار موثق لأنها خارج نطاقه حالياً.
 - [ ] إضافة استعادة من أخطاء parsing لعرض عدة أخطاء مستقلة ومفيدة في الدورة الواحدة دون أخطاء متسلسلة مضللة.
@@ -202,6 +202,7 @@
 | 2026-11-21 | المرحلة 3: loader أولي | `irq-project` tests; commit `0174d6d` | manifest subset وتحميل ملفات فقط؛ لا cross-module resolution |
 | 2026-11-21 | المرحلة 3/11: `irq check-project` | اختبارات `check_project_checks_each_listed_module_and_reports_limits`, `check_project_type_diagnostic_points_to_the_failing_source_file`, `check_project_parse_diagnostic_uses_the_failing_module_file_and_span`; workspace test/clippy/fmt | يفحص كل وحدة مستقلة؛ imports/privacy/cross-module resolution غير مدعومة |
 | 2026-11-21 | المرحلة 2: parser/lexer conformance slice | `ebnf_conformance` (2 tests)، اختبارات lexer/parser، workspace test/clippy/fmt والأمثلة | إصلاح رفض top-level content وCRLF spans؛ لا يغلق المرحلة 2 |
+| 2026-11-21 | المرحلة 2: دعم unit `()` end-to-end | `cargo test --locked --workspace`، `cargo clippy --locked --workspace --all-targets -- -D warnings`، `cargo fmt --all -- --check`، جميع أمثلة IRQ و`git diff --check` | دعم parameter/local/return والقيمة `()`، ورفض return غير المطابق، ونجاح codegen compile/run؛ لا يغلق المرحلة 2 |
 
 ## آلية تحديث TODO2 بعد كل دفعة
 

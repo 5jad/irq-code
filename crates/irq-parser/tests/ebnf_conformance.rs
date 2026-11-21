@@ -45,3 +45,9 @@ fn rejects_normative_invalid_examples_at_parse_time() {
         );
     }
 }
+
+#[test]
+fn accepts_unit_parameter_return_type_and_literal() {
+    let source = "mod unit_test\n\nfn echo(value: ()) -> ()\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n    return value\n\nfn make() -> ()\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n    return ()\n";
+    assert!(parse(source).is_ok());
+}
