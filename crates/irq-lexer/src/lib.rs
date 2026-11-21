@@ -1,5 +1,10 @@
 //! Lexer for the IRQ 0.1 starter syntax.
 
+use irq_diagnostics::codes;
+
+pub const MAX_SOURCE_BYTES: usize = 1_048_576;
+pub const MAX_TOKENS: usize = 100_000;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
     /// UTF-8 byte offset, inclusive.
@@ -50,11 +55,24 @@ pub struct Token {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LexError {
+    pub code: &'static str,
     pub message: String,
     pub span: Span,
 }
 
 pub fn lex(source: &str) -> Result<Vec<Token>, LexError> {
+    if source.len() > MAX_SOURCE_BYTES {
+        return Err(LexError {
+            code: codes::SOURCE_TOO_LARGE,
+            message: format!("source exceeds the {MAX_SOURCE_BYTES} byte limit"),
+            span: Span {
+                start: 0,
+                end: 0,
+                line: 1,
+                column: 1,
+            },
+        });
+    }
     let chars: Vec<char> = source.chars().collect();
     let byte_offsets: Vec<usize> = source
         .char_indices()
@@ -80,6 +98,9 @@ pub fn lex(source: &str) -> Result<Vec<Token>, LexError> {
             continue;
         }
         if c == '\n' {
+            if out.len() >= MAX_TOKENS {
+                return Err(token_limit_error(line, col));
+            }
             i += 1;
             line += 1;
             col = 1;
@@ -135,6 +156,7 @@ pub fn lex(source: &str) -> Result<Vec<Token>, LexError> {
                             '\\' => '\\',
                             escaped => {
                                 return Err(LexError {
+                                    code: codes::LEX_ERROR,
                                     message: format!("unsupported escape sequence: \\{escaped}"),
                                     span: Span {
                                         start: byte_offsets[escape_start],
@@ -151,6 +173,7 @@ pub fn lex(source: &str) -> Result<Vec<Token>, LexError> {
                     }
                     '\\' => {
                         return Err(LexError {
+                            code: codes::LEX_ERROR,
                             message: "incomplete escape sequence at end of string".into(),
                             span: Span {
                                 start: byte_offsets[i],
@@ -170,6 +193,7 @@ pub fn lex(source: &str) -> Result<Vec<Token>, LexError> {
             }
             if !closed {
                 return Err(LexError {
+                    code: codes::LEX_ERROR,
                     message: "unterminated string literal".into(),
                     span: Span {
                         start: byte_offsets[start],
@@ -200,6 +224,7 @@ pub fn lex(source: &str) -> Result<Vec<Token>, LexError> {
                 t
             } else {
                 single(c, &mut i, &mut col).ok_or_else(|| LexError {
+                    code: codes::LEX_ERROR,
                     message: format!("unexpected character: {c}"),
                     span: Span {
                         start: byte_offsets[start],
@@ -210,6 +235,9 @@ pub fn lex(source: &str) -> Result<Vec<Token>, LexError> {
                 })?
             }
         };
+        if out.len() >= MAX_TOKENS {
+            return Err(token_limit_error(start_line, start_col));
+        }
         out.push(Token {
             kind,
             span: Span {
@@ -230,6 +258,19 @@ pub fn lex(source: &str) -> Result<Vec<Token>, LexError> {
         },
     });
     Ok(out)
+}
+
+fn token_limit_error(line: usize, column: usize) -> LexError {
+    LexError {
+        code: codes::TOKEN_LIMIT,
+        message: format!("token count exceeds the {MAX_TOKENS} token limit"),
+        span: Span {
+            start: 0,
+            end: 0,
+            line,
+            column,
+        },
+    }
 }
 
 fn single(c: char, i: &mut usize, col: &mut usize) -> Option<TokenKind> {
@@ -307,5 +348,42 @@ mod tests {
                 .message
                 .contains("incomplete escape sequence")
         );
+    }
+
+    #[test]
+    fn rejects_oversized_source_before_scanning() {
+        let source = "x".repeat(MAX_SOURCE_BYTES + 1);
+        let error = lex(&source).unwrap_err();
+        assert_eq!(error.code, codes::SOURCE_TOO_LARGE);
+        assert_eq!(error.span.start, 0);
+    }
+
+    #[test]
+    fn rejects_excessive_token_count() {
+        let source = "a ".repeat(MAX_TOKENS + 1);
+        let error = lex(&source).unwrap_err();
+        assert_eq!(error.code, codes::TOKEN_LIMIT);
+    }
+
+    #[test]
+    fn deterministic_fuzz_smoke_never_panics() {
+        let alphabet = [
+            'a', '1', '_', ' ', '\n', '#', '"', '\\', 'ع', '(', '+', '-', '/', '\t',
+        ];
+        let mut state = 0x5eed_u64;
+        for _ in 0..1_000 {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            let length = (state as usize) % 256;
+            let mut input = String::with_capacity(length * 2);
+            for _ in 0..length {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                input.push(alphabet[(state as usize) % alphabet.len()]);
+            }
+            assert!(std::panic::catch_unwind(|| lex(&input)).is_ok());
+        }
     }
 }

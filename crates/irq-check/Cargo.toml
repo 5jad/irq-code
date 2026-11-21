@@ -2,10 +2,11 @@
 name = "irq-check"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
-
 [dependencies]
 irq-ast = { path = "../irq-ast" }
+irq-diagnostics = { path = "../irq-diagnostics" }
 
 [dev-dependencies]
 irq-parser = { path = "../irq-parser" }

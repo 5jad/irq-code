@@ -1,6 +1,7 @@
 //! First scalar type checker for the executable IRQ subset.
 
 use irq_ast::{BinaryOp, Expression, Function, Module, Statement, UnaryOp};
+use irq_diagnostics::codes;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,13 +21,17 @@ pub fn check(module: &Module) -> Result<(), Vec<CheckError>> {
             f.return_type.clone(),
         );
         if signatures.insert(f.name.clone(), signature).is_some() {
-            errors.push(err("E0208", f, format!("duplicate function `{}`", f.name)));
+            errors.push(err(
+                codes::TYPE_DUPLICATE_FUNCTION,
+                f,
+                format!("duplicate function `{}`", f.name),
+            ));
         }
     }
     for f in &module.functions {
         if !supported_type(&f.return_type) {
             errors.push(err(
-                "E0200",
+                codes::TYPE_UNSUPPORTED,
                 f,
                 format!("unsupported return type `{}`", f.return_type),
             ));
@@ -36,19 +41,27 @@ pub fn check(module: &Module) -> Result<(), Vec<CheckError>> {
         for p in &f.parameters {
             if !supported_type(&p.ty) {
                 errors.push(err(
-                    "E0200",
+                    codes::TYPE_UNSUPPORTED,
                     f,
                     format!("unsupported parameter type `{}`", p.ty),
                 ));
             }
             if env.insert(p.name.clone(), (p.ty.clone(), false)).is_some() {
-                errors.push(err("E0201", f, format!("duplicate name `{}`", p.name)));
+                errors.push(err(
+                    codes::TYPE_DUPLICATE_BINDING,
+                    f,
+                    format!("duplicate name `{}`", p.name),
+                ));
             }
         }
         let mut returned = false;
         for (index, stmt) in f.body.iter().enumerate() {
             if returned {
-                errors.push(err("E0202", f, "unreachable statement after return".into()));
+                errors.push(err(
+                    codes::TYPE_UNREACHABLE,
+                    f,
+                    "unreachable statement after return".into(),
+                ));
                 break;
             }
             match stmt {
@@ -59,12 +72,16 @@ pub fn check(module: &Module) -> Result<(), Vec<CheckError>> {
                     value,
                 } => {
                     if !supported_type(ty) {
-                        errors.push(err("E0200", f, format!("unsupported local type `{ty}`")));
+                        errors.push(err(
+                            codes::TYPE_UNSUPPORTED,
+                            f,
+                            format!("unsupported local type `{ty}`"),
+                        ));
                         continue;
                     }
                     if env.contains_key(name) {
                         errors.push(err(
-                            "E0201",
+                            codes::TYPE_DUPLICATE_BINDING,
                             f,
                             format!("name `{name}` is already defined in this function"),
                         ));
@@ -73,22 +90,26 @@ pub fn check(module: &Module) -> Result<(), Vec<CheckError>> {
                     match infer_expected(value, ty, &env, &signatures) {
                         Ok(actual) if actual == *ty => {}
                         Ok(actual) => errors.push(err(
-                            "E0203",
+                            codes::TYPE_MISMATCH,
                             f,
                             format!(
                                 "type mismatch for `{name}`: expected `{ty}`, found `{actual}`"
                             ),
                         )),
-                        Err(e) => errors.push(err("E0204", f, e)),
+                        Err(e) => errors.push(err(codes::TYPE_EXPRESSION, f, e)),
                     }
                     // Preserve the declared binding after a primary initializer error
                     // to avoid cascading `unknown name` diagnostics.
                     env.insert(name.clone(), (ty.clone(), *mutable));
                 }
                 Statement::Assign { name, value } => match env.get(name) {
-                    None => errors.push(err("E0205", f, format!("unknown variable `{name}`"))),
+                    None => errors.push(err(
+                        codes::TYPE_UNKNOWN_NAME,
+                        f,
+                        format!("unknown variable `{name}`"),
+                    )),
                     Some((_, false)) => errors.push(err(
-                        "E0206",
+                        codes::TYPE_IMMUTABLE,
                         f,
                         format!("cannot assign to immutable variable `{name}`"),
                     )),
@@ -96,13 +117,13 @@ pub fn check(module: &Module) -> Result<(), Vec<CheckError>> {
                         match infer_expected(value, expected, &env, &signatures) {
                             Ok(actual) if actual == *expected => {}
                             Ok(actual) => errors.push(err(
-                                "E0203",
+                                codes::TYPE_MISMATCH,
                                 f,
                                 format!(
                                     "assignment to `{name}` expects `{expected}`, found `{actual}`"
                                 ),
                             )),
-                            Err(e) => errors.push(err("E0204", f, e)),
+                            Err(e) => errors.push(err(codes::TYPE_EXPRESSION, f, e)),
                         }
                     }
                 },
@@ -114,11 +135,11 @@ pub fn check(module: &Module) -> Result<(), Vec<CheckError>> {
                     match infer(condition, &env, &signatures) {
                         Ok(t) if t == "bool" => {}
                         Ok(t) => errors.push(err(
-                            "E0209",
+                            codes::TYPE_CONDITION,
                             f,
                             format!("if condition must be bool, found `{t}`"),
                         )),
-                        Err(e) => errors.push(err("E0204", f, e)),
+                        Err(e) => errors.push(err(codes::TYPE_EXPRESSION, f, e)),
                     }
                     let then_returns =
                         check_return_branch(then_body, f, &env, &signatures, &mut errors);
@@ -129,7 +150,7 @@ pub fn check(module: &Module) -> Result<(), Vec<CheckError>> {
                     returned = then_returns && else_returns;
                     if returned && index + 1 != f.body.len() {
                         errors.push(err(
-                            "E0202",
+                            codes::TYPE_UNREACHABLE,
                             f,
                             "if/else return must be the final statement".into(),
                         ));
@@ -140,11 +161,11 @@ pub fn check(module: &Module) -> Result<(), Vec<CheckError>> {
                     match infer(condition, &env, &signatures) {
                         Ok(t) if t == "bool" => {}
                         Ok(t) => errors.push(err(
-                            "E0209",
+                            codes::TYPE_CONDITION,
                             f,
                             format!("while condition must be bool, found `{t}`"),
                         )),
-                        Err(e) => errors.push(err("E0204", f, e)),
+                        Err(e) => errors.push(err(codes::TYPE_EXPRESSION, f, e)),
                     }
                     // A while-loop may execute zero times, so it never proves that
                     // the enclosing function returns. Its body is still type-checked.
@@ -154,16 +175,16 @@ pub fn check(module: &Module) -> Result<(), Vec<CheckError>> {
                     match infer_expected(value, &f.return_type, &env, &signatures) {
                         Ok(actual) if actual == f.return_type => {}
                         Ok(actual) => errors.push(err(
-                            "E0203",
+                            codes::TYPE_MISMATCH,
                             f,
                             format!("return expects `{}`, found `{actual}`", f.return_type),
                         )),
-                        Err(e) => errors.push(err("E0204", f, e)),
+                        Err(e) => errors.push(err(codes::TYPE_EXPRESSION, f, e)),
                     }
                     returned = true;
                     if index + 1 != f.body.len() {
                         errors.push(err(
-                            "E0202",
+                            codes::TYPE_UNREACHABLE,
                             f,
                             "return must be the final statement in this MVP subset".into(),
                         ));
@@ -174,7 +195,7 @@ pub fn check(module: &Module) -> Result<(), Vec<CheckError>> {
         }
         if !returned {
             errors.push(err(
-                "E0207",
+                codes::TYPE_RETURN_PATH,
                 f,
                 "function has no final return statement".into(),
             ));
@@ -210,7 +231,7 @@ fn check_return_branch(
             } => {
                 if !supported_type(ty) {
                     errors.push(err(
-                        "E0200",
+                        codes::TYPE_UNSUPPORTED,
                         function,
                         format!("unsupported local type `{ty}` in branch"),
                     ));
@@ -218,7 +239,7 @@ fn check_return_branch(
                 }
                 if branch_env.contains_key(name) {
                     errors.push(err(
-                        "E0201",
+                        codes::TYPE_DUPLICATE_BINDING,
                         function,
                         format!("name `{name}` is already defined in this branch"),
                     ));
@@ -227,22 +248,22 @@ fn check_return_branch(
                 match infer_expected(value, ty, &branch_env, signatures) {
                     Ok(actual) if actual == *ty => {}
                     Ok(actual) => errors.push(err(
-                        "E0203",
+                        codes::TYPE_MISMATCH,
                         function,
                         format!("branch variable `{name}` expects `{ty}`, found `{actual}`"),
                     )),
-                    Err(e) => errors.push(err("E0204", function, e)),
+                    Err(e) => errors.push(err(codes::TYPE_EXPRESSION, function, e)),
                 }
                 branch_env.insert(name.clone(), (ty.clone(), *mutable));
             }
             Statement::Assign { name, value } => match branch_env.get(name) {
                 None => errors.push(err(
-                    "E0205",
+                    codes::TYPE_UNKNOWN_NAME,
                     function,
                     format!("unknown variable `{name}` in branch"),
                 )),
                 Some((_, false)) => errors.push(err(
-                    "E0206",
+                    codes::TYPE_IMMUTABLE,
                     function,
                     format!("cannot assign to immutable variable `{name}` in branch"),
                 )),
@@ -254,13 +275,13 @@ fn check_return_branch(
                 ) {
                     Ok(actual) if actual == *expected => {}
                     Ok(actual) => errors.push(err(
-                        "E0203",
+                        codes::TYPE_MISMATCH,
                         function,
                         format!(
                             "branch assignment to `{name}` expects `{expected}`, found `{actual}`"
                         ),
                     )),
-                    Err(e) => errors.push(err("E0204", function, e)),
+                    Err(e) => errors.push(err(codes::TYPE_EXPRESSION, function, e)),
                 },
             },
             Statement::If {
@@ -271,11 +292,11 @@ fn check_return_branch(
                 match infer(condition, &branch_env, signatures) {
                     Ok(t) if t == "bool" => {}
                     Ok(t) => errors.push(err(
-                        "E0209",
+                        codes::TYPE_CONDITION,
                         function,
                         format!("nested if condition must be bool, found `{t}`"),
                     )),
-                    Err(e) => errors.push(err("E0204", function, e)),
+                    Err(e) => errors.push(err(codes::TYPE_EXPRESSION, function, e)),
                 }
                 let then_returns =
                     check_return_branch(then_body, function, &branch_env, signatures, errors);
@@ -283,7 +304,7 @@ fn check_return_branch(
                     check_return_branch(else_body, function, &branch_env, signatures, errors);
                 if then_returns && else_returns && !is_last {
                     errors.push(err(
-                        "E0202",
+                        codes::TYPE_UNREACHABLE,
                         function,
                         "unreachable statement after a returning nested if".into(),
                     ));
@@ -296,11 +317,11 @@ fn check_return_branch(
                 match infer(condition, &branch_env, signatures) {
                     Ok(t) if t == "bool" => {}
                     Ok(t) => errors.push(err(
-                        "E0209",
+                        codes::TYPE_CONDITION,
                         function,
                         format!("nested while condition must be bool, found `{t}`"),
                     )),
-                    Err(e) => errors.push(err("E0204", function, e)),
+                    Err(e) => errors.push(err(codes::TYPE_EXPRESSION, function, e)),
                 }
                 // A loop's body may run zero times; do not propagate its return state.
                 check_return_branch(body, function, &branch_env, signatures, errors);
@@ -308,7 +329,7 @@ fn check_return_branch(
             Statement::Return(value) => {
                 if !is_last {
                     errors.push(err(
-                        "E0202",
+                        codes::TYPE_UNREACHABLE,
                         function,
                         "return must be the final statement in a branch".into(),
                     ));
@@ -316,14 +337,14 @@ fn check_return_branch(
                 match infer_expected(value, &function.return_type, &branch_env, signatures) {
                     Ok(actual) if actual == function.return_type => {}
                     Ok(actual) => errors.push(err(
-                        "E0203",
+                        codes::TYPE_MISMATCH,
                         function,
                         format!(
                             "branch return expects `{}`, found `{actual}`",
                             function.return_type
                         ),
                     )),
-                    Err(e) => errors.push(err("E0204", function, e)),
+                    Err(e) => errors.push(err(codes::TYPE_EXPRESSION, function, e)),
                 }
                 return true;
             }
@@ -612,7 +633,7 @@ mod tests {
             check(&program("    let x: i32 = a\n    x = 3\n    return x"))
                 .unwrap_err()
                 .iter()
-                .any(|e| e.code == "E0206")
+                .any(|e| e.code == codes::TYPE_IMMUTABLE)
         );
     }
     #[test]
@@ -621,7 +642,7 @@ mod tests {
             check(&program("    return true"))
                 .unwrap_err()
                 .iter()
-                .any(|e| e.code == "E0203")
+                .any(|e| e.code == codes::TYPE_MISMATCH)
         );
     }
 
@@ -717,7 +738,7 @@ mod tests {
             check(&parse(&bad).unwrap())
                 .unwrap_err()
                 .iter()
-                .any(|e| e.code == "E0209")
+                .any(|e| e.code == codes::TYPE_CONDITION)
         );
     }
 
@@ -744,7 +765,7 @@ mod tests {
             check(&non_bool)
                 .unwrap_err()
                 .iter()
-                .any(|e| e.code == "E0209")
+                .any(|e| e.code == codes::TYPE_CONDITION)
         );
 
         let missing_return = program("    let mut n: i32 = 0\n    while n < 3:\n      n = n + 1");
@@ -752,7 +773,7 @@ mod tests {
             check(&missing_return)
                 .unwrap_err()
                 .iter()
-                .any(|e| e.code == "E0207")
+                .any(|e| e.code == codes::TYPE_RETURN_PATH)
         );
     }
 
@@ -775,7 +796,7 @@ mod tests {
             check(&parse(source).unwrap())
                 .unwrap_err()
                 .iter()
-                .any(|e| e.code == "E0207")
+                .any(|e| e.code == codes::TYPE_RETURN_PATH)
         );
     }
 

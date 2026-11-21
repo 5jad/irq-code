@@ -2,23 +2,33 @@
 //! Expression parsing is provided for the MVP expression subset.
 
 use irq_ast::{BinaryOp, Expression, Function, Module, Parameter, Statement, UnaryOp};
+use irq_diagnostics::codes;
 use irq_lexer::{Token, TokenKind};
+
+pub const MAX_EXPRESSION_DEPTH: usize = 128;
+pub const MAX_BLOCK_DEPTH: usize = 64;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseError {
     pub code: &'static str,
     pub line: usize,
     pub message: String,
+    pub span: Option<irq_lexer::Span>,
 }
 
 /// Parse one expression with explicit precedence and associativity.
 pub fn parse_expression(source: &str) -> Result<Expression, ParseError> {
     let tokens = irq_lexer::lex(source).map_err(|e| ParseError {
-        code: "E0002",
+        code: e.code,
         line: e.span.line,
         message: e.message,
+        span: Some(e.span),
     })?;
-    let mut p = ExprParser { tokens, pos: 0 };
+    let mut p = ExprParser {
+        tokens,
+        pos: 0,
+        depth: 0,
+    };
     let expr = p.expression(0)?;
     if !matches!(p.peek(), TokenKind::Eof | TokenKind::Newline) {
         return Err(p.err("unexpected token after expression"));
@@ -29,6 +39,7 @@ pub fn parse_expression(source: &str) -> Result<Expression, ParseError> {
 struct ExprParser {
     tokens: Vec<Token>,
     pos: usize,
+    depth: usize,
 }
 impl ExprParser {
     fn peek(&self) -> &TokenKind {
@@ -43,12 +54,30 @@ impl ExprParser {
     }
     fn err(&self, message: &str) -> ParseError {
         ParseError {
-            code: "E0101",
+            code: codes::EXPRESSION_ERROR,
             line: self.tokens[self.pos.min(self.tokens.len() - 1)].span.line,
             message: message.into(),
+            span: Some(self.tokens[self.pos.min(self.tokens.len() - 1)].span),
         }
     }
     fn expression(&mut self, min_bp: u8) -> Result<Expression, ParseError> {
+        if self.depth >= MAX_EXPRESSION_DEPTH {
+            return Err(ParseError {
+                code: codes::NESTING_LIMIT,
+                line: self.tokens[self.pos.min(self.tokens.len() - 1)].span.line,
+                message: format!(
+                    "expression nesting exceeds the {MAX_EXPRESSION_DEPTH} level limit"
+                ),
+                span: Some(self.tokens[self.pos.min(self.tokens.len() - 1)].span),
+            });
+        }
+        self.depth += 1;
+        let result = self.expression_inner(min_bp);
+        self.depth -= 1;
+        result
+    }
+
+    fn expression_inner(&mut self, min_bp: u8) -> Result<Expression, ParseError> {
         let mut lhs = match self.take() {
             TokenKind::Number(n) => Expression::Integer(
                 n.parse()
@@ -130,9 +159,10 @@ impl ExprParser {
 
 pub fn parse(source: &str) -> Result<Module, ParseError> {
     irq_lexer::lex(source).map_err(|e| ParseError {
-        code: "E0002",
+        code: e.code,
         line: e.span.line,
         message: e.message,
+        span: Some(e.span),
     })?;
     let rows: Vec<(usize, &str)> = source
         .lines()
@@ -308,6 +338,14 @@ fn parse_block(
     cursor: &mut usize,
     expected_indent: usize,
 ) -> Result<Vec<Statement>, ParseError> {
+    if expected_indent > 4 + MAX_BLOCK_DEPTH * 2 {
+        return Err(ParseError {
+            code: codes::NESTING_LIMIT,
+            line: rows.get(*cursor).map(|row| row.0).unwrap_or(1),
+            message: format!("block nesting exceeds the {MAX_BLOCK_DEPTH} level limit"),
+            span: None,
+        });
+    }
     let mut statements = Vec::new();
     while *cursor < rows.len() {
         let (line, text) = rows[*cursor];
@@ -441,9 +479,10 @@ fn parse_statement(source: &str, line: usize) -> Result<Statement, ParseError> {
 
 fn error(line: usize, message: &str) -> ParseError {
     ParseError {
-        code: "E0100",
+        code: codes::PARSE_ERROR,
         line,
         message: message.to_owned(),
+        span: None,
     }
 }
 
@@ -555,5 +594,61 @@ mod tests {
                 .message
                 .contains("while body must not be empty")
         );
+    }
+
+    #[test]
+    fn rejects_excessively_nested_expressions_with_stable_code() {
+        let source = format!(
+            "{}1{}",
+            "(".repeat(MAX_EXPRESSION_DEPTH + 1),
+            ")".repeat(MAX_EXPRESSION_DEPTH + 1)
+        );
+        let error = parse_expression(&source).unwrap_err();
+        assert_eq!(error.code, codes::NESTING_LIMIT);
+    }
+
+    #[test]
+    fn rejects_excessively_nested_blocks_with_stable_code() {
+        let mut source = String::from(
+            "mod deep\nfn f() -> i32\n  reads: none\n  writes: none\n  requires: true\n  ensures: true\n  body:\n",
+        );
+        for level in 0..=MAX_BLOCK_DEPTH {
+            source.push_str(&" ".repeat(4 + 2 * level));
+            source.push_str("while true:\n");
+        }
+        source.push_str(&" ".repeat(4 + 2 * (MAX_BLOCK_DEPTH + 1)));
+        source.push_str("return 0\n");
+        let error = parse(&source).unwrap_err();
+        assert_eq!(error.code, codes::NESTING_LIMIT);
+    }
+
+    #[test]
+    fn rejects_oversized_module_before_structural_parsing() {
+        let source = format!("{}{}", VALID, " ".repeat(irq_lexer::MAX_SOURCE_BYTES));
+        let error = parse(&source).unwrap_err();
+        assert_eq!(error.code, codes::SOURCE_TOO_LARGE);
+    }
+
+    #[test]
+    fn deterministic_fuzz_smoke_never_panics() {
+        let alphabet = [
+            'a', '1', '_', ' ', '\n', '#', '"', '\\', 'ع', '(', '+', '-', '/', '\t',
+        ];
+        let mut state = 0xc0ffee_u64;
+        for _ in 0..1_000 {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            let length = (state as usize) % 256;
+            let mut input = String::with_capacity(length * 2);
+            for _ in 0..length {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                input.push(alphabet[(state as usize) % alphabet.len()]);
+            }
+            assert!(std::panic::catch_unwind(|| parse(&input)).is_ok());
+            assert!(std::panic::catch_unwind(|| parse_expression(&input)).is_ok());
+        }
     }
 }

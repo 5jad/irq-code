@@ -105,7 +105,7 @@ fn emit_block(
                     .get(name)
                     .ok_or_else(|| CodegenError(format!("missing type for `{name}`")))?;
                 let value = emit_expr(value, Some(ty), env, signatures)?;
-                writeln!(out, "{pad}__irq_{} = {};", name, value).unwrap();
+                writeln!(out, "{pad}__irq_{name} = {value};").unwrap();
             }
             Statement::Return(value) => {
                 let value = emit_expr(value, Some(return_type), env, signatures)?;

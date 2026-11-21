@@ -1,0 +1,7 @@
+mod broken
+fn main() -> i32
+  reads: none
+  writes: none
+  requires: true
+  body:
+    return 0

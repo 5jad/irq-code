@@ -25,12 +25,15 @@
 - [قواعد EBNF للـsubset المنفذ حالياً](docs/implemented-subset.ebnf)
 - [بحث أخطاء الكود المولد ومخاطره الأمنية](docs/ai-code-risk-research.md)
 - [عقد كتابة IRQ بواسطة نماذج AI](docs/ai-authoring-contract.md)
+- [سياسة MSRV والتبعيات](docs/dependency-policy.md)
+- [JSON Schema للتشخيصات](docs/diagnostic.schema.json)
 
 ## بناء المشروع
 
 ```sh
 cargo build --workspace
 cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
 cargo run -p irq -- check examples/hello.irq
 cargo run -p irq -- check examples/if_mixed_return.irq
 cargo run -p irq -- check examples/integer_boundaries.irq
@@ -44,6 +47,10 @@ cargo run -p irq -- build examples/checked_arithmetic.irq /tmp/libchecked_arithm
 ```
 
 ## الحالة الحالية
+
+- الحد الأدنى لإصدار Rust هو 1.88.0، مثبت في `rust-toolchain.toml`. CI يتحقق من Linux وWindows وmacOS؛ تبعية runtime للكومبايلر/CLI صفر، و`serde_json` للاختبارات فقط.
+- أخطاء lexer/parser/typecheck وI/O/backend التي يخرجها CLI تستخدم رموزاً ثابتة وغلاف JSON موثقاً. SourceMap يحتفظ بملفات متعددة، وإزاحات byte UTF-8 وأعمدة Unicode scalar؛ CLI حالياً يترجم ملفاً واحداً في الاستدعاء.
+- اختبارات التكامل تغطي compile-pass وcompile-fail، واختبارات lexer/parser تشمل deterministic fuzz-smoke ومدخلات حجم/تعشيق كبيرة. هذه ليست بديلاً عن حملة cargo-fuzz طويلة المدة.
 
 - يعمل lexer ويحوّل الرموز مع إزاحات byte-accurate لـUTF-8، وله اختبارات عربية للمواقع والأخطاء.
 - يعمل parser أولي يتحقق من اسم الوحدة ورأس الدالة والأقسام، ويبني AST لـ`let`, الإسناد و`return` مع subset من التعبيرات.

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/5jad/irq-code/blob/main/docs/diagnostic.schema.json",
+  "title": "IRQ diagnostic response",
+  "type": "object",
+  "required": ["schema_version", "status", "diagnostics"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "status": { "const": "error" },
+    "diagnostics": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/diagnostic" }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "diagnostic": {
+      "type": "object",
+      "required": ["code", "kind", "severity", "message", "labels"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^E[0-9]{4}$" },
+        "kind": { "type": "string", "minLength": 1 },
+        "severity": { "enum": ["error", "warning", "note"] },
+        "message": { "type": "string" },
+        "labels": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/label" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "label": {
+      "type": "object",
+      "required": ["primary", "file", "line", "column", "start", "end", "message"],
+      "properties": {
+        "primary": { "type": "boolean" },
+        "file": { "type": "string", "minLength": 1 },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 },
+        "message": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -44,15 +44,15 @@
 ## المرحلة 1 — تأسيس المترجم والاختبارات
 
 - [x] مساحة عمل Cargo بمكونات منفصلة.
-- [ ] إضافة CI يبني ويختبر المشروع على Linux وWindows وmacOS.
+- [x] إضافة GitHub Actions CI على Linux وWindows وmacOS باستخدام MSRV 1.88.0؛ نتيجة التشغيل البعيدة تُراجع بعد الدفع.
 - [x] تثبيت وتشغيل `rustfmt` واختبارات الوحدة المحلية.
 - [x] تشغيل `clippy --workspace --all-targets -- -D warnings` محلياً.
-- [ ] إضافة CI تلقائي وfixtures تكامل `compile-pass` و`compile-fail`.
-- [ ] تطبيق JSON Schema ثابت للتشخيصات؛ العقد الحالي مقترح فقط.
-- [ ] اعتماد إصدار Rust أدنى (MSRV) وسياسة تحديث التبعيات.
-- [ ] اعتماد ترقيم أخطاء ثابت، وJSON Schema لإخراج التشخيصات.
-- [ ] إضافة source map موحد للملفات والمديات، ورسائل متعددة الملفات.
-- [ ] إضافة اختبارات fuzz للـlexer/parser وحماية من مدخلات شديدة الحجم أو العمق.
+- [x] إضافة CI تلقائي وfixtures تكامل `compile-pass` و`compile-fail` مع فحوص أكواد ومواقع التشخيص.
+- [x] تثبيت JSON Schema Draft 2020-12 لإصدار diagnostic response `1.0.0` واختبار وجوده وتوافق النسخة.
+- [x] اعتماد Rust 1.88.0 كـMSRV وسياسة تحديث التبعيات في `docs/dependency-policy.md`؛ الاعتماد الخارجي للاختبارات فقط.
+- [x] اعتماد رموز خطأ ثابتة للـlexer/parser/typechecker/codegen/I/O وJSON diagnostics envelope.
+- [x] إضافة SourceMap متعدد الملفات وbyte spans وUnicode-scalar locations وlabels ثانوية؛ compile CLI يبقى single-file حالياً.
+- [x] إضافة deterministic fuzz-smoke للـlexer/parser، وحدود 1 MiB للمصدر و100,000 token وعمق 128 للتعبير/64 للكتل. هذا لا يدعي حملة cargo-fuzz طويلة المدة.
 
 **بوابة الانتقال:** CI نظيف، ورسائل الأخطاء ثابتة ومختبرة آلياً.
 

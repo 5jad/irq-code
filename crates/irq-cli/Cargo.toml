@@ -2,6 +2,7 @@
 name = "irq"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 [[bin]]
@@ -14,3 +15,7 @@ irq-parser = { path = "../irq-parser" }
 irq-check = { path = "../irq-check" }
 irq-codegen-rust = { path = "../irq-codegen-rust" }
 irq-ast = { path = "../irq-ast" }
+irq-diagnostics = { path = "../irq-diagnostics" }
+
+[dev-dependencies]
+serde_json.workspace = true
