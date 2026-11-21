@@ -1,0 +1,13 @@
+[package]
+name = "irq-hir"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+irq-ast = { path = "../irq-ast" }
+
+[dev-dependencies]
+irq-parser = { path = "../irq-parser" }
+irq-check = { path = "../irq-check" }

@@ -10,6 +10,7 @@ dependencies = [
  "irq-check",
  "irq-codegen-rust",
  "irq-diagnostics",
+ "irq-hir",
  "irq-lexer",
  "irq-parser",
  "serde_json",
@@ -42,6 +43,15 @@ name = "irq-diagnostics"
 version = "0.1.0"
 dependencies = [
  "serde_json",
+]
+
+[[package]]
+name = "irq-hir"
+version = "0.1.0"
+dependencies = [
+ "irq-ast",
+ "irq-check",
+ "irq-parser",
 ]
 
 [[package]]

@@ -103,6 +103,17 @@ fn main() -> ExitCode {
         emit_error(&diagnostics, &sources);
         return ExitCode::FAILURE;
     }
+    if let Err(error) = irq_hir::lower(&module) {
+        emit_error(
+            &[Diagnostic::error(
+                codes::TYPE_EXPRESSION,
+                "hir_lowering_error",
+                error.to_string(),
+            )],
+            &sources,
+        );
+        return ExitCode::FAILURE;
+    }
 
     match command {
         "emit-rust" => match irq_codegen_rust::emit(&module) {
@@ -125,7 +136,7 @@ fn main() -> ExitCode {
         "build" => build_rust(&module, &args[3], &sources),
         _ => {
             println!(
-                "{{\"status\":\"ok\",\"phase\":\"mvp_subset\",\"checks\":[\"syntax_subset\",\"scalar_types\",\"immutability\",\"return_types\",\"if_else_flow\",\"while_subset\",\"constant_zero_division\",\"constant_integer_range\"],\"not_checked\":[\"contracts\",\"effects\",\"for_loops\",\"break\",\"loop_invariants\",\"general_dataflow\"],\"backend\":\"rust_subset_available_via_emit-rust_and_build\",\"generated_runtime_guards\":[\"integer_overflow\",\"division_by_zero\"],\"module\":{:?},\"functions\":{}}}",
+                "{{\"status\":\"ok\",\"phase\":\"mvp_subset\",\"checks\":[\"syntax_subset\",\"scalar_types\",\"immutability\",\"return_types\",\"if_else_flow\",\"while_subset\",\"constant_zero_division\",\"constant_integer_range\",\"typed_hir_lowering\"],\"not_checked\":[\"contracts\",\"effects\",\"for_loops\",\"break\",\"loop_invariants\",\"general_dataflow\",\"ownership_and_borrowing\",\"multi_module_resolution\"],\"backend\":\"rust_subset_available_via_emit-rust_and_build\",\"generated_runtime_guards\":[\"integer_overflow\",\"division_by_zero\"],\"module\":{:?},\"functions\":{}}}",
                 module.name,
                 module.functions.len()
             );

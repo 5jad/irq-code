@@ -13,6 +13,7 @@ path = "src/main.rs"
 irq-lexer = { path = "../irq-lexer" }
 irq-parser = { path = "../irq-parser" }
 irq-check = { path = "../irq-check" }
+irq-hir = { path = "../irq-hir" }
 irq-codegen-rust = { path = "../irq-codegen-rust" }
 irq-ast = { path = "../irq-ast" }
 irq-diagnostics = { path = "../irq-diagnostics" }

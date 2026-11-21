@@ -11,9 +11,9 @@
 
 ## مراحل المترجم
 
-`source -> lexer -> parser -> AST -> name/type/effect checks -> HIR -> Rust backend -> rustc`
+`source -> lexer -> parser -> AST -> name/type checks -> typed HIR (initial) -> Rust backend -> rustc`
 
-هذا هو المسار المستهدف؛ التنفيذ الحالي لا يملك HIR بعد، ويولّد `emit-rust` مباشرة من AST للـsubset فقط.
+هذا هو مسار `irq check` الحالي، بما فيه lowering أولي إلى typed HIR. لا يزال Rust backend يولّد كود الـsubset مباشرة من AST؛ HIR الكامل وتحليل effects وتوليد backend منه مؤجلة.
 
 العقود والتحقق الرمزي مرحلة لاحقة منفصلة. لا ندّعي إثباتها في MVP قبل تعريف المنطق المدعوم واختباره.
 
@@ -26,6 +26,7 @@
 - [بحث أخطاء الكود المولد ومخاطره الأمنية](docs/ai-code-risk-research.md)
 - [عقد كتابة IRQ بواسطة نماذج AI](docs/ai-authoring-contract.md)
 - [سياسة MSRV والتبعيات](docs/dependency-policy.md)
+- [حالة HIR وحدود نموذج الملكية](docs/hir-and-ownership.md)
 - [JSON Schema للتشخيصات](docs/diagnostic.schema.json)
 
 ## بناء المشروع

@@ -6,6 +6,7 @@ members = [
   "crates/irq-parser",
   "crates/irq-diagnostics",
   "crates/irq-check",
+  "crates/irq-hir",
   "crates/irq-codegen-rust",
   "crates/irq-cli",
 ]
