@@ -48,7 +48,7 @@ cargo run -p irq -- build examples/checked_arithmetic.irq /tmp/libchecked_arithm
 
 ## الحالة الحالية
 
-- الحد الأدنى لإصدار Rust هو 1.88.0، مثبت في `rust-toolchain.toml`. CI يتحقق من Linux وWindows وmacOS؛ تبعية runtime للكومبايلر/CLI صفر، و`serde_json` للاختبارات فقط.
+- الحد الأدنى لإصدار Rust هو 1.88.0، مثبت في `rust-toolchain.toml`. إعداد GitHub Actions يستهدف Linux وWindows وmacOS؛ نجاح تشغيل runners البعيدة لم يُثبت بعد. تبعية runtime للكومبايلر/CLI صفر، و`serde_json` للاختبارات فقط.
 - أخطاء lexer/parser/typecheck وI/O/backend التي يخرجها CLI تستخدم رموزاً ثابتة وغلاف JSON موثقاً. SourceMap يحتفظ بملفات متعددة، وإزاحات byte UTF-8 وأعمدة Unicode scalar؛ CLI حالياً يترجم ملفاً واحداً في الاستدعاء.
 - اختبارات التكامل تغطي compile-pass وcompile-fail، واختبارات lexer/parser تشمل deterministic fuzz-smoke ومدخلات حجم/تعشيق كبيرة. هذه ليست بديلاً عن حملة cargo-fuzz طويلة المدة.
 

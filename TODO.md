@@ -44,7 +44,8 @@
 ## المرحلة 1 — تأسيس المترجم والاختبارات
 
 - [x] مساحة عمل Cargo بمكونات منفصلة.
-- [x] إضافة GitHub Actions CI على Linux وWindows وmacOS باستخدام MSRV 1.88.0؛ نتيجة التشغيل البعيدة تُراجع بعد الدفع.
+- [x] إعداد GitHub Actions CI على Linux وWindows وmacOS باستخدام MSRV 1.88.0.
+- [ ] نجاح تشغيل CI البعيد: GitHub أنهى jobs الثلاثة خلال ثانيتين مع `runner_id=0` وبدون خطوات أو logs؛ أُعيد التشغيل وبقي الفشل نفسه، لذلك السبب يبدو قبل بدء runner ويحتاج تحقق إعدادات/توفر GitHub Actions.
 - [x] تثبيت وتشغيل `rustfmt` واختبارات الوحدة المحلية.
 - [x] تشغيل `clippy --workspace --all-targets -- -D warnings` محلياً.
 - [x] إضافة CI تلقائي وfixtures تكامل `compile-pass` و`compile-fail` مع فحوص أكواد ومواقع التشخيص.
@@ -54,7 +55,7 @@
 - [x] إضافة SourceMap متعدد الملفات وbyte spans وUnicode-scalar locations وlabels ثانوية؛ compile CLI يبقى single-file حالياً.
 - [x] إضافة deterministic fuzz-smoke للـlexer/parser، وحدود 1 MiB للمصدر و100,000 token وعمق 128 للتعبير/64 للكتل. هذا لا يدعي حملة cargo-fuzz طويلة المدة.
 
-**بوابة الانتقال:** CI نظيف، ورسائل الأخطاء ثابتة ومختبرة آلياً.
+**بوابة الانتقال:** إعداد CI موجود والاختبارات المحلية نظيفة؛ تظل البوابة مفتوحة إلى أن تعمل jobs البعيدة بنجاح، ورسائل الأخطاء ثابتة ومختبرة آلياً.
 
 ## المرحلة 2 — Lexer وParser كاملان
 
